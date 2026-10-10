@@ -4,7 +4,6 @@ import android.accessibilityservice.GestureDescription;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Path;
-import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -201,7 +200,8 @@ final class Vm {
 
         /**
          * Whether the node is still what the plan resolved: in the active window (a dialog that
-         * opened over it fails), visible, enabled, with the same bounds and label.
+         * opened over it fails), visible, enabled, with the same view id and label. Bounds are not
+         * compared: the keyboard opening after a type step resizes the layout under the target.
          */
         boolean current(Ui ui) {
             AccessibilityNodeInfo root = ui.getRootInActiveWindow();
@@ -215,12 +215,9 @@ final class Vm {
                     && print(node).equals(seen);
         }
 
-        /** Bounds, identity and label; a text field's own text is left out so typing keeps it. */
+        /** Identity and label; a text field's own text is left out so typing keeps it. */
         private static String print(AccessibilityNodeInfo n) {
-            Rect r = new Rect();
-            n.getBoundsInScreen(r);
-            return r.toShortString()
-                    + n.getViewIdResourceName()
+            return n.getViewIdResourceName()
                     + "|"
                     + (n.isEditable() ? "" : n.getText())
                     + "|"

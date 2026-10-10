@@ -1,0 +1,18 @@
+{
+  "name": "android-use",
+  "version": "1.0.0",
+  "description": "Let an AI agent use one Android device through two plain-language tools.",
+  "author": {
+    "name": "austinintelligence",
+    "url": "https://github.com/austinintelligence"
+  },
+  "homepage": "https://github.com/austinintelligence/android-use#readme",
+  "repository": "https://github.com/austinintelligence/android-use",
+  "license": "MIT",
+  "keywords": [
+    "android",
+    "mcp",
+    "automation",
+    "accessibility"
+  ]
+}

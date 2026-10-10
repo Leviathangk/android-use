@@ -80,7 +80,8 @@ impl Engine {
     pub fn model_read(&mut self, command: CommandRead) -> Result<ModelResponse> {
         // Reading the device about what the agent acts on is what reconciles an
         // uncertain action from an earlier process (see journal::Journal::reconcile).
-        let observes = matches!(command, CommandRead::Screen { .. } | CommandRead::Page | CommandRead::PageText { .. } | CommandRead::BrowserTabs);
+        // Chrome reads reconcile their own surface inside `Engine::read`.
+        let observes = matches!(command, CommandRead::Screen { .. });
         let response = self.read_state(command)?;
         if observes {
             self.reconcile_outcomes()?;
@@ -485,7 +486,7 @@ impl Engine {
         let mut text = success_text(actions);
         let changed = (receipt.m > 0).then_some(Surface::Browser);
         let Some(bytes) = receipt.artifact.as_deref().and_then(|artifact| self.artifacts.bytes(artifact).ok()) else {
-            if receipt.artifact.is_some() {
+            if receipt.artifact.is_some() || receipt.e.is_some() {
                 text.push_str(UNFETCHED);
             }
             return Ok(Step { text, image: None, changed });

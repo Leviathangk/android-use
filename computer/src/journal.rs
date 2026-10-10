@@ -8,14 +8,15 @@
 //!
 //! A pending record that outlives the process that wrote it means the device
 //! may have acted without the host learning the outcome. The journal then
-//! fences new mutations: they return `unknown` until the agent reads the screen,
-//! which calls [`Journal::reconcile`] and resolves those records as `unknown`.
+//! fences new mutations: they return `unknown` until the agent reads the same
+//! surface, which calls [`Journal::reconcile`] and resolves them as `unknown`.
 //! Every access takes an exclusive lock on a sidecar file and reloads the
 //! journal first, so the CLI and the MCP server can share one journal.
 use crate::{
     api::{Code, Error, Receipt, Result},
     artifact::valid,
-    device::{atomic, Paths},
+    device::{atomic, recover, Paths},
+    engine::session_id,
 };
 use serde_json::{json, Value};
 use std::{
@@ -30,18 +31,29 @@ const COMPACT_AT: u64 = 1024 * 1024;
 const MAX_RECORD: usize = 2048;
 const MAX_ENTRIES: usize = 1024;
 const REUSED: &str = "operation id was already used for a different plan";
+pub(crate) const ANDROID: &str = "a";
+pub(crate) const BROWSER: &str = "b";
 
 #[derive(Clone)]
 enum State {
-    Pending { digest: Box<str>, generation: u64 },
+    Pending { digest: Box<str>, generation: u64, owner: Box<str>, surface: Box<str> },
     Done { digest: Box<str>, receipt: Receipt },
 }
 
+#[derive(Default)]
 pub(crate) struct Journal {
     path: PathBuf,
     lock_path: PathBuf,
     states: HashMap<Box<str>, State>,
     order: VecDeque<Box<str>>,
+    owner: Box<str>,
+    held: Option<fs::File>,
+}
+
+impl Drop for Journal {
+    fn drop(&mut self) {
+        let _ = self.held.take().map(|_| fs::remove_file(self.path.with_extension(format!("owner-{}", self.owner))));
+    }
 }
 
 /// A client resent a request id whose earlier attempt may have acted. Say so
@@ -60,7 +72,8 @@ pub(crate) fn unknown(id: &str, generation: u64) -> Receipt {
 
 impl Journal {
     pub(crate) fn open(paths: &Paths) -> Result<Self> {
-        let mut journal = Self { path: paths.journal.clone(), lock_path: paths.journal.with_extension("lock"), states: HashMap::new(), order: VecDeque::new() };
+        let mut journal = Self::default();
+        (journal.path, journal.lock_path, journal.owner) = (paths.journal.clone(), paths.journal.with_extension("lock"), session_id().into());
         journal.locked(|_| Ok(()))?;
         Ok(journal)
     }
@@ -69,16 +82,16 @@ impl Journal {
     /// attempt with the same id and digest. While an earlier process left a
     /// pending record behind, new operations return `unknown` without being
     /// journaled or dispatched.
-    pub(crate) fn begin(&mut self, id: &str, generation: u64, digest: &str) -> Result<Option<Receipt>> {
+    pub(crate) fn begin(&mut self, id: &str, generation: u64, digest: &str, surface: &str) -> Result<Option<Receipt>> {
         self.locked(|journal| {
             if let Some(state) = journal.states.get(id) {
                 return match state {
-                    State::Pending { digest: d, generation } if d.as_ref() == digest => Ok(Some(unknown(id, *generation))),
+                    State::Pending { digest: d, generation, .. } if d.as_ref() == digest => Ok(Some(unknown(id, *generation))),
                     State::Done { digest: d, receipt } if d.as_ref() == digest => Ok(Some(receipt.clone())),
                     _ => Err(Error::new(Code::Args, REUSED)),
                 };
             }
-            if journal.has_pending() {
+            if journal.states.values().any(|state| matches!(state, State::Pending { .. })) {
                 return Ok(Some(unknown(id, generation)));
             }
             if journal.states.len() >= MAX_ENTRIES {
@@ -87,7 +100,13 @@ impl Journal {
             }
             // The pending record must reach the disk before dispatch: it is what
             // turns a crash mid-operation into `unknown` instead of a replay.
-            journal.append(json!([id, "p", digest, generation]), true)?;
+            if journal.held.is_none() {
+                let held = OpenOptions::new().create(true).truncate(false).write(true).open(journal.path.with_extension(format!("owner-{}", journal.owner)))?;
+                held.lock()?;
+                journal.held = Some(held);
+            }
+            let state = State::Pending { digest: digest.into(), generation, owner: journal.owner.clone(), surface: surface.into() };
+            journal.append(record(id, &state), true)?;
             Ok(None)
         })
     }
@@ -98,27 +117,16 @@ impl Journal {
         self.locked(|journal| journal.append(json!([receipt.id, "d", digest, receipt]), false))
     }
 
-    /// Resolves every outcome still pending from an earlier process as
-    /// `unknown` and lifts the fence. Call only after the agent has read the
-    /// device, because that read is what reconciles the uncertain action.
-    pub(crate) fn reconcile(&mut self) -> Result<usize> {
+    /// Resolves as `unknown` the outcomes no running operation can still settle,
+    /// lifting the fence. Call only after the agent has read `surface`.
+    pub(crate) fn reconcile(&mut self, surface: &str) -> Result<usize> {
         self.locked(|journal| {
-            let pending: Vec<(Box<str>, Box<str>, u64)> = journal
-                .states
-                .iter()
-                .filter_map(|(id, state)| match state {
-                    State::Pending { digest, generation } => Some((id.clone(), digest.clone(), *generation)),
-                    State::Done { .. } => None,
-                })
-                .collect();
-            for (id, digest, generation) in &pending {
-                let receipt = serde_json::to_value(unknown(id, *generation)).map_err(|e| Error::new(Code::Io, e.to_string()))?;
-                journal.apply(&json!([id, "d", digest, receipt]));
-            }
-            if !pending.is_empty() {
+            let settled: Vec<Value> = journal.states.iter().filter_map(|(id, state)| journal.settle(id, state, surface)).collect();
+            settled.iter().for_each(|value| journal.apply(value));
+            if !settled.is_empty() {
                 journal.compact()?;
             }
-            Ok(pending.len())
+            Ok(settled.len())
         })
     }
 
@@ -132,9 +140,21 @@ impl Journal {
         result
     }
 
+    /// The `unknown` outcome for a pending record that a read of `read` settles
+    /// (its surface, or "" for any). This journal has nothing in flight while it
+    /// reconciles; any other holds an OS lock on its owner file from its first
+    /// mutation until it drops, and the OS releases that lock if it dies.
+    fn settle(&self, id: &str, state: &State, read: &str) -> Option<Value> {
+        let State::Pending { digest, generation, owner, surface } = state else { return None };
+        let gone = || !owner.bytes().all(|b| b.is_ascii_hexdigit()) || fs::File::open(self.path.with_extension(format!("owner-{owner}"))).map_or(true, |f| f.try_lock().is_ok());
+        let settled = ["", read].contains(&&**surface) && (*owner == self.owner || gone());
+        settled.then(|| record(id, &State::Done { digest: digest.clone(), receipt: unknown(id, *generation) }))
+    }
+
     fn reload(&mut self) -> Result<()> {
         self.states.clear();
         self.order.clear();
+        recover(&self.path)?;
         let bytes = match fs::read(&self.path) {
             Ok(bytes) => bytes,
             Err(error) if error.kind() == ErrorKind::NotFound => Vec::new(),
@@ -160,10 +180,6 @@ impl Journal {
         Ok(())
     }
 
-    fn has_pending(&self) -> bool {
-        self.states.values().any(|state| matches!(state, State::Pending { .. }))
-    }
-
     fn apply(&mut self, v: &Value) {
         let Some(a) = v.as_array() else { return };
         let (Some(id), Some(kind), Some(digest)) = (a.first().and_then(Value::as_str), a.get(1).and_then(Value::as_str), a.get(2).and_then(Value::as_str)) else { return };
@@ -177,7 +193,8 @@ impl Journal {
         match kind {
             "p" => {
                 if let Some(g) = a.get(3).and_then(Value::as_u64) {
-                    self.states.insert(id.into(), State::Pending { digest: digest.into(), generation: g });
+                    let text = |i: usize| a.get(i).and_then(Value::as_str).unwrap_or_default().into();
+                    self.states.insert(id.into(), State::Pending { digest: digest.into(), generation: g, owner: text(4), surface: text(5) });
                 }
             }
             "d" => {
@@ -232,15 +249,18 @@ impl Journal {
     fn compact(&self) -> Result<()> {
         let mut bytes = Vec::new();
         for id in &self.order {
-            let value = match self.states.get(id.as_ref()) {
-                Some(State::Pending { digest, generation }) => json!([id, "p", digest, generation]),
-                Some(State::Done { digest, receipt }) => json!([id, "d", digest, receipt]),
-                None => continue,
-            };
-            bytes.extend_from_slice(&serde_json::to_vec(&value).map_err(|e| Error::new(Code::Io, e.to_string()))?);
+            let Some(state) = self.states.get(id.as_ref()) else { continue };
+            bytes.extend_from_slice(&serde_json::to_vec(&record(id, state)).map_err(|e| Error::new(Code::Io, e.to_string()))?);
             bytes.push(b'\n');
         }
         atomic(&self.path, &bytes)
+    }
+}
+
+fn record(id: &str, state: &State) -> Value {
+    match state {
+        State::Pending { digest, generation, owner, surface } => json!([id, "p", digest, generation, owner, surface]),
+        State::Done { digest, receipt } => json!([id, "d", digest, receipt]),
     }
 }
 
@@ -263,9 +283,9 @@ mod tests {
     fn journal_unknown_and_dedupe() {
         let d = tempfile::tempdir().unwrap();
         let mut j = open(&d);
-        assert!(j.begin("8", 41, A).unwrap().is_none());
-        assert_eq!(j.begin("8", 41, A).unwrap().unwrap().e.as_deref(), Some("unknown"));
-        assert_eq!(j.begin("8", 41, B).unwrap_err().code, Code::Args);
+        assert!(j.begin("8", 41, A, ANDROID).unwrap().is_none());
+        assert_eq!(j.begin("8", 41, A, ANDROID).unwrap().unwrap().e.as_deref(), Some("unknown"));
+        assert_eq!(j.begin("8", 41, B, ANDROID).unwrap_err().code, Code::Args);
     }
 
     #[test]
@@ -273,21 +293,21 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         {
             let mut j = open(&d);
-            assert!(j.begin("finished", 7, B).unwrap().is_none());
+            assert!(j.begin("finished", 7, B, ANDROID).unwrap().is_none());
             j.finish(B, &receipt("finished")).unwrap();
             // Left pending: the process "crashes" before recording an outcome.
-            assert!(j.begin("crashed", 7, A).unwrap().is_none());
+            assert!(j.begin("crashed", 7, A, ANDROID).unwrap().is_none());
         }
         let mut j = open(&d);
-        assert_eq!(j.begin("crashed", 7, A).unwrap().unwrap().e.as_deref(), Some("unknown"), "same id is unknown");
-        assert_eq!(j.begin("finished", 7, B).unwrap().unwrap().ok, 1, "completed ids replay their receipt");
-        let fresh = j.begin("fresh", 9, A).unwrap().unwrap();
+        assert_eq!(j.begin("crashed", 7, A, ANDROID).unwrap().unwrap().e.as_deref(), Some("unknown"), "same id is unknown");
+        assert_eq!(j.begin("finished", 7, B, ANDROID).unwrap().unwrap().ok, 1, "completed ids replay their receipt");
+        let fresh = j.begin("fresh", 9, A, ANDROID).unwrap().unwrap();
         assert_eq!(fresh.e.as_deref(), Some("unknown"), "new mutations are fenced");
-        assert_eq!(j.reconcile().unwrap(), 1);
-        assert!(j.begin("fresh", 9, A).unwrap().is_none(), "reconciling lifts the fence");
+        assert_eq!(j.reconcile(ANDROID).unwrap(), 1);
+        assert!(j.begin("fresh", 9, A, ANDROID).unwrap().is_none(), "reconciling lifts the fence");
         let mut reopened = open(&d);
-        assert_eq!(reopened.begin("crashed", 7, A).unwrap().unwrap().e.as_deref(), Some("unknown"), "reconciled outcome persists");
-        assert!(reopened.begin("fresh", 9, A).unwrap().is_some(), "a reopened journal stays consistent");
+        assert_eq!(reopened.begin("crashed", 7, A, ANDROID).unwrap().unwrap().e.as_deref(), Some("unknown"), "reconciled outcome persists");
+        assert!(reopened.begin("fresh", 9, A, ANDROID).unwrap().is_some(), "a reopened journal stays consistent");
     }
 
     #[test]
@@ -296,7 +316,7 @@ mod tests {
         let path = Paths::at(d.path().to_path_buf()).unwrap().journal;
         {
             let mut j = open(&d);
-            j.begin("first", 1, A).unwrap();
+            j.begin("first", 1, A, ANDROID).unwrap();
             j.finish(A, &receipt("first")).unwrap();
         }
         let intact = fs::read(&path).unwrap();
@@ -305,7 +325,7 @@ mod tests {
         fs::write(&path, &torn).unwrap();
         let mut j = open(&d);
         assert_eq!(fs::read(&path).unwrap(), intact, "the torn tail is removed on open");
-        assert!(j.begin("second", 2, B).unwrap().is_none());
+        assert!(j.begin("second", 2, B, ANDROID).unwrap().is_none());
         j.finish(B, &receipt("second")).unwrap();
         let reopened = open(&d);
         assert!(matches!(reopened.states.get("second"), Some(State::Done { .. })), "the record after a repair is not lost");
@@ -316,10 +336,23 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let mut server = open(&d);
         let mut cli = open(&d);
-        assert!(cli.begin("pay", 3, A).unwrap().is_none());
-        assert_eq!(server.begin("other", 3, B).unwrap().unwrap().e.as_deref(), Some("unknown"), "the server sees the CLI's pending record");
-        server.reconcile().unwrap();
-        assert!(server.begin("after", 4, B).unwrap().is_none());
+        assert!(cli.begin("pay", 3, A, ANDROID).unwrap().is_none());
+        assert_eq!(server.begin("other", 3, B, ANDROID).unwrap().unwrap().e.as_deref(), Some("unknown"), "the server sees the CLI's pending record");
+        assert_eq!(server.reconcile(ANDROID).unwrap(), 0, "a live sibling's operation may still be running");
+        drop(cli);
+        assert_eq!(server.reconcile(BROWSER).unwrap(), 0, "a Chrome read does not settle an Android action");
+        assert_eq!(server.reconcile(ANDROID).unwrap(), 1, "an exited owner's record is settled by a read of its surface");
+        assert!(server.begin("after", 4, B, ANDROID).unwrap().is_none());
+    }
+
+    #[test]
+    fn legacy_pending_records_settle_on_any_read_and_a_moved_aside_journal_is_restored() {
+        let d = tempfile::tempdir().unwrap();
+        let path = Paths::at(d.path().to_path_buf()).unwrap().journal;
+        fs::write(path.with_extension("bak-1-2"), format!("[\"old\",\"p\",\"{A}\",1]\n")).unwrap();
+        let mut j = open(&d);
+        assert!(j.begin("new", 2, B, BROWSER).unwrap().is_some(), "the backup's pending record still fences");
+        assert_eq!(j.reconcile(BROWSER).unwrap(), 1);
     }
 
     #[test]

@@ -1,0 +1,1316 @@
+{
+ "fixed_per_turn": 834,
+ "results": [
+  {
+   "task": "toggle_wifi",
+   "run": 0,
+   "ok": false,
+   "calls": 5,
+   "wall_ms": 7418,
+   "result_tokens": 473,
+   "fixed_tokens": 4170,
+   "input_tokens": 4643,
+   "output_tokens": 96,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 1628,
+     "text": "Done. Opened Settings.\nNow on screen:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 32,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Network & internet\"",
+     "ms": 249,
+     "text": "No item labeled \"Network & internet\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 44,
+     "output_tokens": 21
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Internet\"",
+     "ms": 1187,
+     "text": "No item labeled \"Internet\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 1 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 117,
+     "output_tokens": 19
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 1027,
+     "text": "The screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nMost of this screen is not available as text, so the screen image is attached. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 94,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Wi-Fi\"",
+     "ms": 1698,
+     "text": "No item labeled \"Wi-Fi\" is on the current screen. Nothing was run.\nOn screen now:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 706×1568 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 1.53 device pixels), 44 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 186,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_wifi",
+   "run": 1,
+   "ok": false,
+   "calls": 5,
+   "wall_ms": 4256,
+   "result_tokens": 432,
+   "fixed_tokens": 4170,
+   "input_tokens": 4602,
+   "output_tokens": 96,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 650,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nGoogle search",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 32,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Network & internet\"",
+     "ms": 310,
+     "text": "No item labeled \"Network & internet\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 119,
+     "output_tokens": 21
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Internet\"",
+     "ms": 1902,
+     "text": "Done. Tapped Internet.\nNow on screen:\nNetwork & internet\nNavigate up — button\nInternet — AndroidWifi\nSIMs — T-Mobile\nHotspot & tethering — Off\nData Saver — Off\nVPN — None\nPrivate DNS — Automatic\nAdaptive connectivity — On\nMobile network security — Network type, encryption, notification controls",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 68,
+     "output_tokens": 19
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 6,
+     "text": "Network & internet\nNavigate up — button\nInternet — AndroidWifi\nSIMs — T-Mobile\nHotspot & tethering — Off\nData Saver — Off\nVPN — None\nPrivate DNS — Automatic\nAdaptive connectivity — On\nMobile network security — Network type, encryption, notification controls",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 58,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Wi-Fi\"",
+     "ms": 239,
+     "text": "No item labeled \"Wi-Fi\" is on the current screen. Nothing was run.\nOn screen now:\nNetwork & internet\nNavigate up — button\nInternet — AndroidWifi\nSIMs — T-Mobile\nHotspot & tethering — Off\nData Saver — Off\nVPN — None\nPrivate DNS — Automatic\nAdaptive connectivity — On\nMobile network security — Network type, encryption, notification controls\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 16 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 155,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_wifi",
+   "run": 2,
+   "ok": false,
+   "calls": 5,
+   "wall_ms": 4739,
+   "result_tokens": 452,
+   "fixed_tokens": 4170,
+   "input_tokens": 4622,
+   "output_tokens": 96,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 634,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Network & internet\"",
+     "ms": 562,
+     "text": "No item labeled \"Network & internet\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 119,
+     "output_tokens": 21
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Internet\"",
+     "ms": 2015,
+     "text": "Done. Tapped Internet.\nNow on screen:\nNetwork & internet\nNavigate up — button\nInternet — AndroidWifi\nSIMs — T-Mobile\nHotspot & tethering — Off\nData Saver — Off\nVPN — None\nPrivate DNS — Automatic\nAdaptive connectivity — On\nMobile network security — Network type, encryption, notification controls",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 68,
+     "output_tokens": 19
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 6,
+     "text": "Network & internet\nNavigate up — button\nInternet — AndroidWifi\nSIMs — T-Mobile\nHotspot & tethering — Off\nData Saver — Off\nVPN — None\nPrivate DNS — Automatic\nAdaptive connectivity — On\nMobile network security — Network type, encryption, notification controls",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 58,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Wi-Fi\"",
+     "ms": 209,
+     "text": "No item labeled \"Wi-Fi\" is on the current screen. Nothing was run.\nOn screen now:\nNetwork & internet\nNavigate up — button\nInternet — AndroidWifi\nSIMs — T-Mobile\nHotspot & tethering — Off\nData Saver — Off\nVPN — None\nPrivate DNS — Automatic\nAdaptive connectivity — On\nMobile network security — Network type, encryption, notification controls\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 16 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 155,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "find_setting_scroll",
+   "run": 0,
+   "ok": true,
+   "calls": 4,
+   "wall_ms": 5045,
+   "result_tokens": 358,
+   "fixed_tokens": 3336,
+   "input_tokens": 3694,
+   "output_tokens": 76,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 462,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 1359,
+     "text": "Done. Scrolled down.\nNow on screen:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 1037,
+     "text": "Done. Scrolled down.\nNow on screen:\nSearch Settings\nStorage — 41% used - 4.76 GB free\nBattery — 100%\nSystem — Languages, gestures, time, backup\nAbout emulated device — sdk_gphone64_arm64\nSecurity & privacy — App security, device lock, permissions\nLocation — On / 5 apps have access to location\nPasswords, passkeys & accounts — Suggestions for sign-in & autofill\nDigital Wellbeing & parental controls — Screen time, app timers, bedtime schedules\nSafety & emergency — Emergency SOS, medical info, alerts\nAccessibility",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 122,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"About emulated device\"",
+     "ms": 992,
+     "text": "Done. Tapped About emulated device.\nNow on screen:\nAbout emulated device\nNavigate up — button\nDevice name — sdk_gphone64_arm64\nPhone number — +1 555-123-4567\nLegal information\nSIM status — T-Mobile\nModel — sdk_gphone64_arm64\nIMEI — 867400022047199\nAndroid version\nBasic info\nLegal & regulatory\nDevice details",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 86,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "find_setting_scroll",
+   "run": 1,
+   "ok": false,
+   "calls": 8,
+   "wall_ms": 1776,
+   "result_tokens": 276,
+   "fixed_tokens": 6672,
+   "input_tokens": 6948,
+   "output_tokens": 139,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 427,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 121,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 3,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 5,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 3,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 25,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 24,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 18,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    }
+   ]
+  },
+  {
+   "task": "find_setting_scroll",
+   "run": 2,
+   "ok": false,
+   "calls": 3,
+   "wall_ms": 7274,
+   "result_tokens": 345,
+   "fixed_tokens": 2502,
+   "input_tokens": 2847,
+   "output_tokens": 59,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 3795,
+     "text": "Done. Opened Settings.\nNow on screen:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 1648,
+     "text": "Done. Scrolled down.\nNow on screen:\nSearch Settings\nStorage — 41% used - 4.76 GB free\nBattery — 100%\nSystem — Languages, gestures, time, backup\nAbout emulated device — sdk_gphone64_arm64\nSecurity & privacy — App security, device lock, permissions\nLocation — On / 5 apps have access to location\nPasswords, passkeys & accounts — Suggestions for sign-in & autofill\nDigital Wellbeing & parental controls — Screen time, app timers, bedtime schedules\nSafety & emergency — Emergency SOS, medical info, alerts\nAccessibility",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 122,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"About emulated device\"",
+     "ms": 665,
+     "text": "Done. Tapped About emulated device.\nNow on screen:\nSearch Settings\nStorage — 41% used - 4.76 GB free\nBattery — 100%\nSystem — Languages, gestures, time, backup\nAbout emulated device — sdk_gphone64_arm64\nSecurity & privacy — App security, device lock, permissions\nLocation — On / 5 apps have access to location\nPasswords, passkeys & accounts — Suggestions for sign-in & autofill\nDigital Wellbeing & parental controls — Screen time, app timers, bedtime schedules\nSafety & emergency — Emergency SOS, medical info, alerts\nAccessibility",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 125,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "fill_submit_form",
+   "run": 0,
+   "ok": false,
+   "calls": 2,
+   "wall_ms": 6596,
+   "result_tokens": 172,
+   "fixed_tokens": 1668,
+   "input_tokens": 1840,
+   "output_tokens": 53,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 3011,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"hello\" in \"Fixture text\" then tap \"SUBMIT FORM\"",
+     "ms": 1284,
+     "text": "No item labeled \"Fixture text\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 118,
+     "output_tokens": 31
+    }
+   ]
+  },
+  {
+   "task": "fill_submit_form",
+   "run": 1,
+   "ok": false,
+   "calls": 2,
+   "wall_ms": 2446,
+   "result_tokens": 172,
+   "fixed_tokens": 1668,
+   "input_tokens": 1840,
+   "output_tokens": 53,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 701,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"hello\" in \"Fixture text\" then tap \"SUBMIT FORM\"",
+     "ms": 465,
+     "text": "No item labeled \"Fixture text\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 118,
+     "output_tokens": 31
+    }
+   ]
+  },
+  {
+   "task": "fill_submit_form",
+   "run": 2,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 3665,
+   "result_tokens": 202,
+   "fixed_tokens": 1668,
+   "input_tokens": 1870,
+   "output_tokens": 53,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 2072,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nBenchmark scroll surface — scroll area\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"hello\" in \"Fixture text\" then tap \"SUBMIT FORM\"",
+     "ms": 490,
+     "text": "Done. Typed hello in Fixture text and tapped SUBMIT FORM.\nNow on screen:\nAU agentic benchmark fixture\nFixture text — hello text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nBenchmark scroll surface — scroll area\nSubmitted: hello — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 104,
+     "output_tokens": 31
+    }
+   ]
+  },
+  {
+   "task": "dismiss_dialog",
+   "run": 0,
+   "ok": false,
+   "calls": 3,
+   "wall_ms": 2452,
+   "result_tokens": 240,
+   "fixed_tokens": 2502,
+   "input_tokens": 2742,
+   "output_tokens": 66,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 530,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 581,
+     "text": "No item labeled \"OPEN BENCHMARK DIALOG\" is on the current screen. Nothing was run.\nOn screen now:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 143,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CANCEL\"",
+     "ms": 32,
+     "text": "No item labeled \"CANCEL\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 43,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "dismiss_dialog",
+   "run": 1,
+   "ok": false,
+   "calls": 3,
+   "wall_ms": 2324,
+   "result_tokens": 239,
+   "fixed_tokens": 2502,
+   "input_tokens": 2741,
+   "output_tokens": 66,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 471,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 164,
+     "text": "No item labeled \"OPEN BENCHMARK DIALOG\" is on the current screen. Nothing was run.\nOn screen now:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CANCEL\"",
+     "ms": 365,
+     "text": "No item labeled \"CANCEL\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 1 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 118,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "dismiss_dialog",
+   "run": 2,
+   "ok": false,
+   "calls": 3,
+   "wall_ms": 2221,
+   "result_tokens": 239,
+   "fixed_tokens": 2502,
+   "input_tokens": 2741,
+   "output_tokens": 66,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 516,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 262,
+     "text": "No item labeled \"OPEN BENCHMARK DIALOG\" is on the current screen. Nothing was run.\nOn screen now:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CANCEL\"",
+     "ms": 266,
+     "text": "No item labeled \"CANCEL\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 118,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "confirm_dialog",
+   "run": 0,
+   "ok": false,
+   "calls": 3,
+   "wall_ms": 2301,
+   "result_tokens": 240,
+   "fixed_tokens": 2502,
+   "input_tokens": 2742,
+   "output_tokens": 66,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 495,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 383,
+     "text": "No item labeled \"OPEN BENCHMARK DIALOG\" is on the current screen. Nothing was run.\nOn screen now:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 1 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 143,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CONFIRM\"",
+     "ms": 34,
+     "text": "No item labeled \"CONFIRM\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 43,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "confirm_dialog",
+   "run": 1,
+   "ok": false,
+   "calls": 3,
+   "wall_ms": 3479,
+   "result_tokens": 339,
+   "fixed_tokens": 2502,
+   "input_tokens": 2841,
+   "output_tokens": 66,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 944,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 34,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 324,
+     "text": "No item labeled \"OPEN BENCHMARK DIALOG\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 1 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 122,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CONFIRM\"",
+     "ms": 1103,
+     "text": "No item labeled \"CONFIRM\" is on the current screen. Nothing was run.\nOn screen now:\nAU agentic benchmark fixture\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nBenchmark scroll surface — scroll area\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 576×1280 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 1.88 device pixels), 21 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 183,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "confirm_dialog",
+   "run": 2,
+   "ok": true,
+   "calls": 3,
+   "wall_ms": 4498,
+   "result_tokens": 229,
+   "fixed_tokens": 2502,
+   "input_tokens": 2731,
+   "output_tokens": 66,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1740,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nBenchmark scroll surface — scroll area\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 990,
+     "text": "Done. Tapped OPEN BENCHMARK DIALOG.\nNow on screen:\nBenchmark confirmation\nCANCEL — button\nCONFIRM — button\nDeterministic fixture dialog",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 33,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CONFIRM\"",
+     "ms": 576,
+     "text": "Done. Tapped CONFIRM.\nNow on screen:\nAU agentic benchmark fixture\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nBenchmark scroll surface — scroll area\nDialog confirmed — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_switch",
+   "run": 0,
+   "ok": false,
+   "calls": 2,
+   "wall_ms": 2092,
+   "result_tokens": 172,
+   "fixed_tokens": 1668,
+   "input_tokens": 1840,
+   "output_tokens": 42,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 449,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Benchmark toggle\"",
+     "ms": 513,
+     "text": "No item labeled \"Benchmark toggle\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 118,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_switch",
+   "run": 1,
+   "ok": false,
+   "calls": 2,
+   "wall_ms": 2329,
+   "result_tokens": 193,
+   "fixed_tokens": 1668,
+   "input_tokens": 1861,
+   "output_tokens": 42,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 529,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Benchmark toggle\"",
+     "ms": 462,
+     "text": "No item labeled \"Benchmark toggle\" is on the current screen. Nothing was run.\nOn screen now:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 139,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_switch",
+   "run": 2,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 3637,
+   "result_tokens": 196,
+   "fixed_tokens": 1668,
+   "input_tokens": 1864,
+   "output_tokens": 42,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1717,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nBenchmark scroll surface — scroll area\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Benchmark toggle\"",
+     "ms": 678,
+     "text": "Done. Tapped Benchmark toggle.\nNow on screen:\nAU agentic benchmark fixture\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — on switch\nOPEN BENCHMARK DIALOG — button\nBenchmark scroll surface — scroll area\nToggle=true — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "scroll_to_row_40",
+   "run": 0,
+   "ok": false,
+   "calls": 5,
+   "wall_ms": 5170,
+   "result_tokens": 312,
+   "fixed_tokens": 4170,
+   "input_tokens": 4482,
+   "output_tokens": 113,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 605,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 34,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 298,
+     "text": "No item labeled \"Benchmark scroll surface\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 119,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1994,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 17\nBenchmark scroll surface — scroll area\nFixture row 18 — Fixture row 19, Fixture row 20, Fixture row 21, Fixture row 22, Fixture row 23, Fixture row 24, Fixture row 25, Fixture row 26,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1033,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 38\nBenchmark scroll surface — scroll area\nFixture row 39 — Fixture row 40, Fixture row 41, Fixture row 42, Fixture row 43, Fixture row 44, Fixture row 45, Fixture row 46, Fixture row 47,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Fixture row 40\"",
+     "ms": 11,
+     "text": "Could not tap \"Fixture row 40\" on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 25,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "scroll_to_row_40",
+   "run": 1,
+   "ok": false,
+   "calls": 5,
+   "wall_ms": 7739,
+   "result_tokens": 313,
+   "fixed_tokens": 4170,
+   "input_tokens": 4483,
+   "output_tokens": 113,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 473,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 34,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 3452,
+     "text": "No item labeled \"Benchmark scroll surface\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 576×1280 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 1.88 device pixels), 126 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 120,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1500,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 17\nBenchmark scroll surface — scroll area\nFixture row 18 — Fixture row 19, Fixture row 20, Fixture row 21, Fixture row 22, Fixture row 23, Fixture row 24, Fixture row 25, Fixture row 26,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1048,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 38\nBenchmark scroll surface — scroll area\nFixture row 39 — Fixture row 40, Fixture row 41, Fixture row 42, Fixture row 43, Fixture row 44, Fixture row 45, Fixture row 46, Fixture row 47,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Fixture row 40\"",
+     "ms": 14,
+     "text": "Could not tap \"Fixture row 40\" on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 25,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "scroll_to_row_40",
+   "run": 2,
+   "ok": false,
+   "calls": 5,
+   "wall_ms": 5794,
+   "result_tokens": 312,
+   "fixed_tokens": 4170,
+   "input_tokens": 4482,
+   "output_tokens": 113,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 504,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 34,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 697,
+     "text": "No item labeled \"Benchmark scroll surface\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 6 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 119,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 2090,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 17\nBenchmark scroll surface — scroll area\nFixture row 18 — Fixture row 19, Fixture row 20, Fixture row 21, Fixture row 22, Fixture row 23, Fixture row 24, Fixture row 25, Fixture row 26,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1068,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 38\nBenchmark scroll surface — scroll area\nFixture row 39 — Fixture row 40, Fixture row 41, Fixture row 42, Fixture row 43, Fixture row 44, Fixture row 45, Fixture row 46, Fixture row 47,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Fixture row 40\"",
+     "ms": 22,
+     "text": "Could not tap \"Fixture row 40\" on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 25,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "settings_search",
+   "run": 0,
+   "ok": true,
+   "calls": 5,
+   "wall_ms": 4136,
+   "result_tokens": 488,
+   "fixed_tokens": 4170,
+   "input_tokens": 4658,
+   "output_tokens": 99,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 681,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Search Settings\"",
+     "ms": 836,
+     "text": "No item labeled \"Search Settings\" is on the current screen. Nothing was run.\nOn screen now:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 1 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 139,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"battery\" in \"Search settings\"",
+     "ms": 1167,
+     "text": "Could not type into \"Search settings\" on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 24,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 6,
+     "text": "Search Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 88,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Battery\"",
+     "ms": 240,
+     "text": "No item labeled \"Battery\" is on the current screen. Nothing was run.\nOn screen now:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 706×1568 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 1.53 device pixels), 44 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 185,
+     "output_tokens": 19
+    }
+   ]
+  },
+  {
+   "task": "settings_search",
+   "run": 1,
+   "ok": true,
+   "calls": 5,
+   "wall_ms": 3918,
+   "result_tokens": 467,
+   "fixed_tokens": 4170,
+   "input_tokens": 4637,
+   "output_tokens": 99,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 702,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Search Settings\"",
+     "ms": 765,
+     "text": "No item labeled \"Search Settings\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 118,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"battery\" in \"Search settings\"",
+     "ms": 925,
+     "text": "Could not type into \"Search settings\" on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 24,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 8,
+     "text": "Search Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 88,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Battery\"",
+     "ms": 333,
+     "text": "No item labeled \"Battery\" is on the current screen. Nothing was run.\nOn screen now:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 706×1568 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 1.53 device pixels), 44 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 185,
+     "output_tokens": 19
+    }
+   ]
+  },
+  {
+   "task": "settings_search",
+   "run": 2,
+   "ok": true,
+   "calls": 5,
+   "wall_ms": 4789,
+   "result_tokens": 467,
+   "fixed_tokens": 4170,
+   "input_tokens": 4637,
+   "output_tokens": 99,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 669,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Search Settings\"",
+     "ms": 905,
+     "text": "No item labeled \"Search Settings\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 2 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 118,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"battery\" in \"Search settings\"",
+     "ms": 1305,
+     "text": "Could not type into \"Search settings\" on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 24,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 6,
+     "text": "Search Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 88,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Battery\"",
+     "ms": 252,
+     "text": "No item labeled \"Battery\" is on the current screen. Nothing was run.\nOn screen now:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 706×1568 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 1.53 device pixels), 44 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 185,
+     "output_tokens": 19
+    }
+   ]
+  },
+  {
+   "task": "status_and_screen",
+   "run": 0,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 8,
+   "result_tokens": 102,
+   "fixed_tokens": 1668,
+   "input_tokens": 1770,
+   "output_tokens": 32,
+   "trace": [
+    {
+     "tool": "android.read",
+     "command": "status",
+     "ms": 3,
+     "text": "Ready. Android Use is connected and can read and control the screen.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 5,
+     "text": "Search Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 88,
+     "output_tokens": 16
+    }
+   ]
+  },
+  {
+   "task": "status_and_screen",
+   "run": 1,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 7,
+   "result_tokens": 102,
+   "fixed_tokens": 1668,
+   "input_tokens": 1770,
+   "output_tokens": 32,
+   "trace": [
+    {
+     "tool": "android.read",
+     "command": "status",
+     "ms": 2,
+     "text": "Ready. Android Use is connected and can read and control the screen.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 5,
+     "text": "Search Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 88,
+     "output_tokens": 16
+    }
+   ]
+  },
+  {
+   "task": "status_and_screen",
+   "run": 2,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 7,
+   "result_tokens": 102,
+   "fixed_tokens": 1668,
+   "input_tokens": 1770,
+   "output_tokens": 32,
+   "trace": [
+    {
+     "tool": "android.read",
+     "command": "status",
+     "ms": 2,
+     "text": "Ready. Android Use is connected and can read and control the screen.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 4,
+     "text": "Search Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 88,
+     "output_tokens": 16
+    }
+   ]
+  }
+ ]
+}

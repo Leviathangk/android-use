@@ -1,0 +1,7 @@
+e1 AU agentic benchmark fixture
+e2 list Benchmark scroll surface
+e3 edit Fixture text=""
+e4 btn SUBMIT FORM
+e5 sw Benchmark toggle=off
+e6 btn OPEN BENCHMARK DIALOG
+e7 Ready: Fixture row 1, Fixture r…

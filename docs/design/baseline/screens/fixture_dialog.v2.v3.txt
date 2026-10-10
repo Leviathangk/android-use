@@ -1,0 +1,4 @@
+e1 Benchmark confirmation
+e2 Deterministic fixture dialog
+e3 btn CANCEL
+e4 btn CONFIRM

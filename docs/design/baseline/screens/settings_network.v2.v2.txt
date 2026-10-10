@@ -1,0 +1,10 @@
+Network & internet
+btn Navigate up
+Internet: AndroidWifi
+SIMs: T-Mobile
+Hotspot & tethering: Off
+Data Saver: Off
+VPN: None
+Private DNS: Automatic
+Adaptive connectivity: On
+Mobile network security: Network type, encryption…

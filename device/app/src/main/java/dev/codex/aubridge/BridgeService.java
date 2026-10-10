@@ -25,7 +25,13 @@ public final class BridgeService extends Service {
                         .setContentTitle("AU Bridge")
                         .setContentText("Authenticated local Android control")
                         .build();
-        startForeground(31, note);
+        // Without a type, startForeground claims every manifest type, and claiming
+        // mediaProjection before consent throws on API 34+. Projection adds it later.
+        if (Build.VERSION.SDK_INT >= 34) {
+            startForeground(31, note, ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
+        } else {
+            startForeground(31, note);
+        }
         instance = this;
         bridge = new Bridge(this);
         bridge.start();

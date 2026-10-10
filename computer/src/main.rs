@@ -76,8 +76,9 @@ fn run(human: bool) -> Result<Value> {
         "act" if a.get(1).is_some_and(|raw| !raw.trim_start().starts_with('{')) => {
             let mut engine = Engine::open()?;
             engine.load_image_space();
-            let response = parse_act_command(&a[1..].join(" ")).and_then(|actions| engine.model_act(&actions, None)).map_err(|e| Error::plain(e.code, plain_error(&e)))?;
-            engine.save_image_space();
+            let response = parse_act_command(&a[1..].join(" ")).and_then(|actions| engine.model_act(&actions, None));
+            engine.save_image_space(); // also on failure: a failed command may still have changed the screen
+            let response = response.map_err(|e| Error::plain(e.code, plain_error(&e)))?;
             model_value(&engine, response)?
         }
         "act" => {

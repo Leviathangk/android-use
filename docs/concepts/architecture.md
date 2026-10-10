@@ -44,7 +44,7 @@ sequenceDiagram
 
 ## Safety invariants
 
-- **Generation checks.** Every plan carries the UI generation it was compiled against. The helper parses and bounds the whole plan, then checks the generation immediately before the first change, runs forward, and stops at the first failure.
+- **Generation checks.** Every plan carries the UI generation it was compiled against. The helper parses and bounds the whole plan, then checks the generation immediately before the first change and re-validates each later target (same window, bounds, and label) before acting on it, stopping at the first failure.
 - **At most once.** The host durably records a pending digest before sending a plan. If a process ends with a plan pending, new actions are refused as `unknown` until the agent reads the device, so the uncertain plan is never silently repeated. Operation ids are scoped to one process, so a client that restarts and reuses request ids cannot collide with older records.
 - **Bounded everything.** Frames, plans, waits, text, artifacts, and every response sent to an agent have hard limits.
 - **No escape hatches.** No shell, no arbitrary page JavaScript, an allowlist of settings screens, and HTTP(S)-only links. The helper has no `INTERNET` permission and only accepts the ADB shell user.

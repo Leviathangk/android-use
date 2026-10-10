@@ -5,10 +5,8 @@ import android.app.AlertDialog;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
-import android.content.Context;
 import android.content.Intent;
 import android.os.Bundle;
-import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
@@ -48,10 +46,11 @@ public final class TestActivity extends Activity {
         Button longPress = new Button(this);
         longPress.setText("Long press target");
         longPress.setContentDescription("AU long press target");
-        longPress.setOnLongClickListener(view -> {
-            state.setText("Long pressed");
-            return true;
-        });
+        longPress.setOnLongClickListener(
+                view -> {
+                    state.setText("Long pressed");
+                    return true;
+                });
         layout.addView(longPress);
 
         Switch toggle = new Switch(this);
@@ -63,12 +62,16 @@ public final class TestActivity extends Activity {
         Button dialog = new Button(this);
         dialog.setText("Open deterministic dialog");
         dialog.setContentDescription("AU dialog target");
-        dialog.setOnClickListener(view -> new AlertDialog.Builder(this)
-                .setTitle("AU dialog")
-                .setMessage("Deterministic confirmation")
-                .setNegativeButton("Cancel", null)
-                .setPositiveButton("Allow", (ignored, which) -> state.setText("Dialog allowed"))
-                .show());
+        dialog.setOnClickListener(
+                view ->
+                        new AlertDialog.Builder(this)
+                                .setTitle("AU dialog")
+                                .setMessage("Deterministic confirmation")
+                                .setNegativeButton("Cancel", null)
+                                .setPositiveButton(
+                                        "Allow",
+                                        (ignored, which) -> state.setText("Dialog allowed"))
+                                .show());
         layout.addView(dialog);
 
         Button notification = new Button(this);
@@ -100,24 +103,36 @@ public final class TestActivity extends Activity {
     private void postNotification() {
         NotificationManager manager = getSystemService(NotificationManager.class);
         String channel = "au-test";
-        manager.createNotificationChannel(new NotificationChannel(channel, "AU test", NotificationManager.IMPORTANCE_DEFAULT));
-        android.app.Notification notification = new android.app.Notification.Builder(this, channel)
-                .setSmallIcon(android.R.drawable.ic_dialog_info)
-                .setContentTitle("AU deterministic notification")
-                .setContentText("Notification listener validation")
-                .setContentIntent(PendingIntent.getActivity(
-                        this,
-                        7003,
-                        new Intent(this, TestActivity.class),
-                        PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
-                .addAction(new android.app.Notification.Action.Builder(
-                        android.graphics.drawable.Icon.createWithResource(this, android.R.drawable.ic_menu_view),
-                        "Mark handled",
-                        PendingIntent.getBroadcast(this, 7002,
-                                new Intent(this, TestNotificationReceiver.class),
-                                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
-                        .build())
-                .build();
+        manager.createNotificationChannel(
+                new NotificationChannel(
+                        channel, "AU test", NotificationManager.IMPORTANCE_DEFAULT));
+        android.app.Notification notification =
+                new android.app.Notification.Builder(this, channel)
+                        .setSmallIcon(android.R.drawable.ic_dialog_info)
+                        .setContentTitle("AU deterministic notification")
+                        .setContentText("Notification listener validation")
+                        .setContentIntent(
+                                PendingIntent.getActivity(
+                                        this,
+                                        7003,
+                                        new Intent(this, TestActivity.class),
+                                        PendingIntent.FLAG_UPDATE_CURRENT
+                                                | PendingIntent.FLAG_IMMUTABLE))
+                        .addAction(
+                                new android.app.Notification.Action.Builder(
+                                                android.graphics.drawable.Icon.createWithResource(
+                                                        this, android.R.drawable.ic_menu_view),
+                                                "Mark handled",
+                                                PendingIntent.getBroadcast(
+                                                        this,
+                                                        7002,
+                                                        new Intent(
+                                                                this,
+                                                                TestNotificationReceiver.class),
+                                                        PendingIntent.FLAG_UPDATE_CURRENT
+                                                                | PendingIntent.FLAG_IMMUTABLE))
+                                        .build())
+                        .build();
         manager.notify(7001, notification);
         state.setText("Notification posted");
     }

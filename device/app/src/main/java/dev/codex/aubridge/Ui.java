@@ -181,7 +181,6 @@ public final class Ui extends AccessibilityService {
         Scene s = snapshot();
         s.exposed = Math.min(s.frontier, s.nodes.size());
         int action = scrollAction(direction);
-        boolean horizontal = "left".equals(direction) || "right".equals(direction);
         N best = null;
         boolean bestDirectional = false;
         long bestArea = -1;
@@ -189,9 +188,7 @@ public final class Ui extends AccessibilityService {
             N n = s.nodes.get(i);
             if (!n.node.isScrollable()) continue;
             boolean directional = supports(n.node, action);
-            // Only a view that explicitly supports this direction can scroll horizontally, and a
-            // view that advertises other directions cannot scroll this way at all.
-            if (!directional && (horizontal || advertisesDirections(n.node))) continue;
+            if (!directional && !pages(n.node, direction)) continue;
             long area = (long) Math.max(0, n.right - n.left) * Math.max(0, n.bottom - n.top);
             if (best == null
                     || (directional && !bestDirectional)
@@ -219,6 +216,23 @@ public final class Ui extends AccessibilityService {
         }
     }
 
+    /**
+     * Whether forward/backward scrolls the requested axis: only on views without explicit
+     * directions, and horizontally only on views known to be horizontal.
+     */
+    static boolean pages(AccessibilityNodeInfo node, String direction) {
+        return !advertisesDirections(node)
+                && ("left".equals(direction) || "right".equals(direction)) == horizontal(node);
+    }
+
+    private static boolean horizontal(AccessibilityNodeInfo node) {
+        AccessibilityNodeInfo.CollectionInfo info = node.getCollectionInfo();
+        String c = node.getClassName() == null ? "" : node.getClassName().toString();
+        return (info != null && info.getRowCount() == 1 && info.getColumnCount() > 1)
+                || c.endsWith("HorizontalScrollView")
+                || c.endsWith(".ViewPager");
+    }
+
     /** Whether the view advertises any explicit scroll direction (API 23+ views usually do). */
     static boolean advertisesDirections(AccessibilityNodeInfo node) {
         for (String direction : new String[] {"up", "down", "left", "right"}) {
@@ -243,8 +257,12 @@ public final class Ui extends AccessibilityService {
                 fallback = candidate;
             }
         }
+        // A sibling owns the match only when it covers it; a neighbouring control (a row's
+        // "Delete" button beside its title) is a different target.
         for (N candidate : s.nodes) {
-            if (candidate.parentSourceId == match.parentSourceId && candidate.interactive()) {
+            if (candidate.parentSourceId == match.parentSourceId
+                    && candidate.interactive()
+                    && candidate.contains(match)) {
                 if (!candidate.node.isScrollable()) return candidate;
                 fallback = candidate;
             }
@@ -259,32 +277,21 @@ public final class Ui extends AccessibilityService {
      * an unrelated button, such as a destructive one.
      */
     private static N spatialOwner(Scene s, N match) {
-        int cx = (match.left + match.right) / 2, cy = (match.top + match.bottom) / 2;
         N best = null;
         long bestArea = Long.MAX_VALUE;
         for (N candidate : s.nodes) {
             if (!candidate.node.isClickable() || candidate.node.isScrollable()) continue;
-            boolean contains =
-                    cx >= candidate.left
-                            && cx <= candidate.right
-                            && cy >= candidate.top
-                            && cy <= candidate.bottom;
             long area =
                     Math.max(
                             1L,
                             (long) (candidate.right - candidate.left)
                                     * (candidate.bottom - candidate.top));
-            if (contains && (best == null || area < bestArea)) {
+            if (candidate.contains(match) && (best == null || area < bestArea)) {
                 best = candidate;
                 bestArea = area;
             }
         }
         return best;
-    }
-
-    private static boolean containsRef(JSONArray values, int ref) {
-        for (int i = 0; i < values.length(); i++) if (values.optInt(i, -1) == ref) return true;
-        return false;
     }
 
     private static List<SemanticCompiler.Row> compileSemantic(Scene s) {
@@ -333,7 +340,7 @@ public final class Ui extends AccessibilityService {
 
     private Scene build() {
         AccessibilityNodeInfo root = getRootInActiveWindow();
-        if (root == null) return new Scene(generation, "", new ArrayList<>(), 0);
+        if (root == null) return new Scene(generation, "", new ArrayList<>(), 0, false);
         String pkg = root.getPackageName() == null ? "" : root.getPackageName().toString();
         ArrayDeque<Visit> q = new ArrayDeque<>();
         long nextSource = 1;
@@ -353,6 +360,7 @@ public final class Ui extends AccessibilityService {
                 else rest.add(row);
             } else n.recycle();
         }
+        boolean truncated = !q.isEmpty() || frontier.size() + rest.size() > 256;
         while (!q.isEmpty()) q.removeFirst().recycle();
         List<N> all = new ArrayList<>(Math.min(256, frontier.size() + rest.size()));
         for (N n : frontier) {
@@ -371,7 +379,7 @@ public final class Ui extends AccessibilityService {
             all.add(n);
         }
         for (int i = 0; i < all.size(); i++) all.get(i).id = i;
-        return new Scene(generation, shorten(pkg, 255), all, front);
+        return new Scene(generation, shorten(pkg, 255), all, front, truncated);
     }
 
     static final class Visit {
@@ -394,13 +402,15 @@ public final class Ui extends AccessibilityService {
         final String pkg;
         final List<N> nodes;
         final int frontier;
+        final boolean truncated; // walk caps were hit, so absence from nodes proves nothing
         volatile int exposed;
 
-        Scene(long generation, String pkg, List<N> nodes, int frontier) {
+        Scene(long generation, String pkg, List<N> nodes, int frontier, boolean truncated) {
             this.generation = generation;
             this.pkg = pkg;
             this.nodes = nodes;
             this.frontier = frontier;
+            this.truncated = truncated;
         }
 
         N ref(int id) {
@@ -409,6 +419,7 @@ public final class Ui extends AccessibilityService {
 
         boolean label(String text) {
             String find = Targets.normalize(text);
+            if (find.isEmpty()) return false; // "[]" or "…" names nothing, not everything
             for (N n : nodes) if (Targets.normalize(n.label).contains(find)) return true;
             return false;
         }
@@ -419,6 +430,7 @@ public final class Ui extends AccessibilityService {
          */
         boolean named(String text) {
             String find = Targets.normalize(text);
+            if (find.isEmpty()) return false;
             for (N n : nodes) {
                 if (Targets.normalize(n.label).contains(find)
                         || Targets.normalize(n.hint).contains(find)) return true;
@@ -524,6 +536,11 @@ public final class Ui extends AccessibilityService {
 
         boolean decision() {
             return !label.isEmpty() || (flags & 9) != 0 || node.isEditable() || node.isCheckable();
+        }
+
+        boolean contains(N other) {
+            int cx = (other.left + other.right) / 2, cy = (other.top + other.bottom) / 2;
+            return cx >= left && cx <= right && cy >= top && cy <= bottom;
         }
 
         boolean interactive() {

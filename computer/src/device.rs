@@ -316,7 +316,7 @@ pub fn atomic(path: &Path, bytes: &[u8]) -> Result<()> {
     // file move the old one aside first; that path can briefly leave no file.
     match fs::rename(&tmp, path) {
         Ok(()) => Ok(()),
-        Err(error) if path.exists() => {
+        Err(_) if path.exists() => {
             fs::rename(path, &backup)?;
             if let Err(e) = fs::rename(&tmp, path) {
                 let _ = fs::rename(&backup, path);
@@ -324,7 +324,6 @@ pub fn atomic(path: &Path, bytes: &[u8]) -> Result<()> {
                 return Err(e.into());
             }
             fs::remove_file(backup)?;
-            let _ = error;
             Ok(())
         }
         Err(error) => {
@@ -332,6 +331,16 @@ pub fn atomic(path: &Path, bytes: &[u8]) -> Result<()> {
             Err(error.into())
         }
     }
+}
+
+/// Restores the newest file an interrupted `atomic` moved aside, if any.
+pub fn recover(path: &Path) -> Result<()> {
+    let (false, Some(dir), Some(stem)) = (path.exists(), path.parent(), path.file_stem().and_then(|stem| stem.to_str())) else { return Ok(()) };
+    let nanos = |name: &str| name.strip_prefix(&format!("{stem}.bak-"))?.rsplit('-').next()?.parse::<u128>().ok();
+    if let Some((_, name)) = fs::read_dir(dir)?.filter_map(|entry| entry.ok()?.file_name().into_string().ok()).filter_map(|name| Some((nanos(&name)?, name))).max() {
+        fs::rename(dir.join(name), path)?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]

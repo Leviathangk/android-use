@@ -6,10 +6,10 @@ use crate::{
     api::{BrowserPlan, BrowserRead, Code, Error, Plan, Read, Receipt, Result, Scene, VisualOp, VisualPlan, VisualRead, MAX_INLINE},
     artifact::{valid, Artifacts, MAX_ARTIFACT},
     bridge::{Bridge, Observation},
-    browser::Browser,
+    browser::{Browser, Outcome},
     device::{Adb, Device, Paths},
     format,
-    journal::{unknown, Journal},
+    journal::{unknown, Journal, ANDROID, BROWSER},
     visual,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -149,7 +149,7 @@ impl Engine {
                 Ok(json!({"ok":1,"g":g,"cap":cap}))
             }
             Read::Observe { base, detail } => {
-                let scene = match self.bridge_read(|bridge| bridge.observe(base.as_deref(), detail))? {
+                let scene = match self.bridge_read(|bridge| bridge.observe(base.as_deref(), detail)).and_then(|seen| self.journal.reconcile(ANDROID).map(|_| seen))? {
                     Observation::Unchanged(g) => return Ok(json!({"=":1,"o":base.unwrap_or_else(||g.to_string().into()),"g":g})),
                     Observation::Scene(scene) => scene,
                 };
@@ -174,7 +174,7 @@ impl Engine {
                 let end = start + bytes.len() as u64;
                 Ok(json!({"id":id,"size":size,"start":start,"data":STANDARD.encode(&bytes),"more":(end<size) as u8}))
             }
-            Read::Browser { op } => self.browser_read(|browser| browser.read(op.clone())),
+            Read::Browser { op } => self.browser_read(|browser| browser.read(op.clone())).and_then(|page| self.journal.reconcile(BROWSER).map(|_| page)),
             Read::Capabilities => self.bridge_read(|bridge| bridge.query("capabilities", Value::Null)),
             Read::Location => self.bridge_read(|bridge| bridge.query("location", Value::Null)),
             Read::Notifications => self.bridge_read(|bridge| bridge.query("notifications", Value::Null)),
@@ -201,10 +201,10 @@ impl Engine {
         self.read(Read::Browser { op: BrowserRead::Observe })
     }
 
-    /// Called once the agent has read the device: outcomes left pending by an
-    /// earlier process become `unknown`, which lifts the mutation fence.
+    /// Called once the agent has read the Android screen (`read` reconciles
+    /// legacy observes and Chrome reads itself); see `Journal::reconcile`.
     pub(crate) fn reconcile_outcomes(&mut self) -> Result<()> {
-        self.journal.reconcile().map(|_| ())
+        self.journal.reconcile(ANDROID).map(|_| ())
     }
 
     pub fn act(&mut self, p: Plan) -> Result<Value> {
@@ -222,7 +222,7 @@ impl Engine {
     pub(crate) fn run_plan(&mut self, p: &Plan) -> Result<Receipt> {
         let digest = self.digest(&p.wire(0), true)?;
         self.bridge()?;
-        if let Some(prior) = self.journal.begin(&p.id, p.generation, &digest)? {
+        if let Some(prior) = self.journal.begin(&p.id, p.generation, &digest, ANDROID)? {
             return Ok(prior);
         }
         let receipt = match self.bridge().and_then(|bridge| bridge.act(p)) {
@@ -256,7 +256,7 @@ impl Engine {
     pub(crate) fn run_browser_plan(&mut self, p: &BrowserPlan, prepared: bool) -> Result<Receipt> {
         let digest = self.digest(&p.wire(0), true)?;
         self.browser()?;
-        if let Some(prior) = self.journal.begin(&p.id, p.generation, &digest)? {
+        if let Some(prior) = self.journal.begin(&p.id, p.generation, &digest, BROWSER)? {
             return Ok(prior);
         }
         let outcome = match self.browser().and_then(|browser| if prepared { browser.act_prepared(p) } else { browser.act(p) }) {
@@ -268,20 +268,8 @@ impl Engine {
                 return Ok(lost);
             }
         };
-        // Chrome has already acted: a failed artifact write must not abandon
-        // the journal record or turn the outcome into an error.
-        let artifact = outcome.artifact.as_deref().and_then(|bytes| self.artifacts.put(bytes).ok());
-        let receipt = Receipt {
-            id: p.id.clone(),
-            ok: u8::from(outcome.error.is_none()),
-            g: outcome.generation,
-            m: outcome.mutations,
-            at: outcome.at,
-            e: outcome.error.map(Into::into),
-            partial: outcome.partial.then_some(1),
-            next: (outcome.error == Some("unknown")).then(|| "observe".into()),
-            artifact,
-        };
+        let stored = outcome.artifact.as_deref().map(|bytes| self.artifacts.put(bytes));
+        let receipt = browser_receipt(&p.id, &outcome, stored);
         if self.journal.finish(&digest, &receipt).is_err() {
             return Ok(unknown(&p.id, receipt.g));
         }
@@ -295,7 +283,7 @@ impl Engine {
         let VisualOp::Crop { artifact, x, y, w, h } = &p.op;
         let source = self.visual_bytes(artifact)?;
         let cropped = self.artifacts.put(&visual::crop(&source, *x, *y, *w, *h)?)?;
-        if let Some(prior) = self.journal.begin(&p.id, p.generation, &digest)? {
+        if let Some(prior) = self.journal.begin(&p.id, p.generation, &digest, "")? {
             return to_value(prior);
         }
         let receipt = Receipt { id: p.id.clone(), ok: 1, g: p.generation, m: 1, at: None, e: None, partial: None, next: None, artifact: Some(cropped) };
@@ -352,13 +340,28 @@ fn operation_id(session: &str, kind: &str, identity: &str) -> String {
     format!("n{}", &hex(&hash.finalize())[..31])
 }
 
-fn session_id() -> String {
+pub(crate) fn session_id() -> String {
     let mut bytes = [0u8; 16];
     if getrandom::fill(&mut bytes).is_err() {
         let fallback = SystemTime::now().duration_since(UNIX_EPOCH).unwrap_or_default().as_nanos() ^ (u128::from(std::process::id()) << 64);
         bytes = fallback.to_le_bytes();
     }
     hex(&bytes)
+}
+
+/// Chrome has already acted, so a failed artifact write is reported in `e`.
+fn browser_receipt(id: &str, outcome: &Outcome, stored: Option<Result<Box<str>>>) -> Receipt {
+    Receipt {
+        id: id.into(),
+        ok: u8::from(outcome.error.is_none()),
+        g: outcome.generation,
+        m: outcome.mutations,
+        at: outcome.at,
+        e: outcome.error.map(Into::into).or_else(|| matches!(stored, Some(Err(_))).then(|| "artifact".into())),
+        partial: outcome.partial.then_some(1),
+        next: (outcome.error == Some("unknown")).then(|| "observe".into()),
+        artifact: stored.and_then(Result::ok),
+    }
 }
 
 fn to_value(receipt: Receipt) -> Result<Value> {
@@ -389,6 +392,26 @@ mod tests {
         assert_ne!(first, operation_id("session-b", "android", "7#group-0"), "a restarted client reusing JSON-RPC id 7 must not collide");
         assert_ne!(first, operation_id("session-a", "browser", "7#group-0"));
         assert_ne!(session_id(), session_id());
+    }
+
+    #[test]
+    fn a_lost_chrome_capture_is_reported_not_silent() {
+        let r = browser_receipt("x", &Outcome { generation: 3, mutations: 0, at: None, error: None, partial: false, artifact: None }, Some(Err(Error::new(Code::Io, "full"))));
+        assert_eq!((r.ok, r.e.as_deref(), r.artifact), (1, Some("artifact"), None));
+    }
+
+    #[test]
+    fn a_legacy_observe_settles_an_orphaned_android_record() {
+        let d = tempfile::tempdir().unwrap();
+        let mut engine = Engine::at(Paths::at(d.path().to_path_buf()).unwrap()).unwrap();
+        Journal::open(&engine.paths).unwrap().begin("lost", 1, &"a".repeat(64), ANDROID).unwrap();
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let device = Device { endpoint: "t".into(), hardware: "t".into() };
+        engine.attach(Bridge::over(std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap(), device.clone()), device);
+        let mut helper = listener.accept().unwrap().0;
+        std::io::Write::write_all(&mut helper, b"\0\0\0\x07[1,0,5]").unwrap();
+        engine.read(Read::Observe { base: Some("5".into()), detail: 0 }).unwrap();
+        assert!(engine.journal.begin("next", 2, &"b".repeat(64), ANDROID).unwrap().is_none(), "the observe lifted the fence");
     }
 
     #[test]

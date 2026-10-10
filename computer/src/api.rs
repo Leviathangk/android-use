@@ -180,15 +180,33 @@ pub enum BrowserPredicate {
 pub enum Op {
     Tap(u16),
     Long(u16),
-    PointTap { x: u16, y: u16 },
-    Swipe { x1: u16, y1: u16, x2: u16, y2: u16, duration_ms: u16 },
+    PointTap {
+        x: u16,
+        y: u16,
+    },
+    Swipe {
+        x1: u16,
+        y1: u16,
+        x2: u16,
+        y2: u16,
+        duration_ms: u16,
+    },
     Text(u16, Box<str>),
     Scroll(u16, Direction),
+    /// Scrolls the area until the text is on screen (the helper stops at the end of the list).
+    ScrollUntil(u16, Direction, Box<str>),
     Key(Key),
     Gesture(Box<[[u16; 3]]>),
     Wait(Predicate, u16),
     Assert(Predicate),
     Launch(Box<str>),
+    /// Waits inside the helper for the UI to go quiet (and, after a launch, for the app to be in
+    /// front), so the reply describes the screen the plan led to. Never fails the plan.
+    Settle {
+        quiet_ms: u16,
+        cap_ms: u16,
+        package: Box<str>,
+    },
     Setting(Box<str>),
     Link(Box<str>),
     Capture(Capture),
@@ -247,6 +265,7 @@ impl Op {
                 | Self::Swipe { .. }
                 | Self::Text(..)
                 | Self::Scroll(..)
+                | Self::ScrollUntil(..)
                 | Self::Key(_)
                 | Self::Gesture(_)
                 | Self::Launch(_)
@@ -266,11 +285,13 @@ impl Op {
             Self::Swipe { x1, y1, x2, y2, duration_ms } => json!(["swipe", x1, y1, x2, y2, duration_ms]),
             Self::Text(r, t) => json!(["text", r, t]),
             Self::Scroll(r, d) => json!(["scroll", r, d.as_str()]),
+            Self::ScrollUntil(r, d, text) => json!(["scroll_until", r, d.as_str(), text]),
             Self::Key(k) => json!(["key", k.as_str()]),
             Self::Gesture(p) => json!(["gesture", p]),
             Self::Wait(p, t) => json!(["wait", p.wire(), t]),
             Self::Assert(p) => json!(["assert", p.wire()]),
             Self::Launch(p) => json!(["launch", p]),
+            Self::Settle { quiet_ms, cap_ms, package } => json!(["settle", quiet_ms, cap_ms, package]),
             Self::Setting(name) => json!(["setting", name]),
             Self::Link(url) => json!(["link", url]),
             Self::Capture(Capture::Screen) => json!(["capture", "screen"]),

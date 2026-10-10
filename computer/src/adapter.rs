@@ -88,7 +88,9 @@ fn new_call(engine: &mut Engine, name: &str, args: Value, request_identity: Opti
 }
 
 fn model_result(result: Result<ModelResponse>) -> Value {
-    result.map(|response| model_json(&response)).unwrap_or_else(|error| json!({"content":[{"type":"text","text":plain_error(&error)}],"isError":true}))
+    result
+        .map(|response| model_json(&response))
+        .unwrap_or_else(|error| json!({"content":[{"type":"text","text":plain_error(&error)}],"isError":true,"structuredContent":{"status":error.code.wire()}}))
 }
 
 fn model_json(response: &ModelResponse) -> Value {
@@ -96,7 +98,10 @@ fn model_json(response: &ModelResponse) -> Value {
     if let Some(image) = response.image.as_ref().filter(|image| image.mime_type.starts_with("image/")) {
         content.push(json!({"type":"image","data":STANDARD.encode(image.bytes.as_ref()),"mimeType":image.mime_type}));
     }
-    json!({"content":content,"isError":response.failed})
+    let mut result = json!({"content":content,"isError":response.failed});
+    // Small on purpose: clients that copy structured content into the model's context pay for it.
+    result["structuredContent"] = if response.status.is_empty() { json!({"status":"ok"}) } else { json!({"status":response.status,"changed":response.changed}) };
+    result
 }
 fn bounded_line<R: BufRead>(r: &mut R) -> Result<Option<Vec<u8>>> {
     let mut out = Vec::new();
@@ -138,10 +143,10 @@ mod tests {
         let response = ModelResponse {
             text: "Captured the screen. The image is attached.".into(),
             image: Some(crate::engine::ModelImage { bytes: b"png".to_vec().into(), mime_type: "image/png" }),
-            failed: false,
+            ..Default::default()
         };
         let value = model_json(&response);
-        assert!(value.get("structuredContent").is_none());
+        assert_eq!(value["structuredContent"], json!({"status":"ok"}));
         assert_eq!(value["content"][0]["type"], "text");
         assert_eq!(value["content"][1]["type"], "image");
         assert_eq!(value["content"][1]["mimeType"], "image/png");
@@ -172,7 +177,8 @@ mod tests {
 
     #[test]
     fn non_image_media_is_never_sent_as_image_content() {
-        let response = ModelResponse { text: "Saved.".into(), image: Some(crate::engine::ModelImage { bytes: b"RIFF".to_vec().into(), mime_type: "audio/wav" }), failed: false };
+        let response =
+            ModelResponse { text: "Saved.".into(), image: Some(crate::engine::ModelImage { bytes: b"RIFF".to_vec().into(), mime_type: "audio/wav" }), ..Default::default() };
         assert_eq!(model_json(&response)["content"].as_array().unwrap().len(), 1);
     }
 }

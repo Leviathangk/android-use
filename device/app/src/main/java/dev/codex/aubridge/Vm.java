@@ -97,7 +97,15 @@ final class Vm {
                 at = i;
                 if (SystemClock.elapsedRealtime() > end) throw new Fail(i, true);
                 boolean ok;
-                if (p.mutates && !guarded) {
+                if (p.mutates && !guarded && p.name.equals("scroll_until")) {
+                    // A long loop must not hold the guard: it blocks the very events that tell
+                    // it the screen has scrolled.
+                    synchronized (ui.guard()) {
+                        if (ui.snapshot().generation != expected) throw new Stale();
+                    }
+                    guarded = true;
+                    ok = p.apply(context, ui, capture, end);
+                } else if (p.mutates && !guarded) {
                     synchronized (ui.guard()) {
                         if (ui.snapshot().generation != expected) throw new Stale();
                         ok = p.apply(context, ui, capture, end);
@@ -109,6 +117,8 @@ final class Vm {
                     if (p.mutates && p.node != null && !p.current(ui)) throw new Stale();
                     ok = p.apply(context, ui, capture, end);
                 }
+                // Scrolling that found nothing still moved the screen.
+                if (!ok && p.scrolled) committed++;
                 if (!ok) throw new Fail(i, false);
                 if (p.mutates) committed++;
                 if (p.artifact != null) artifact = p.artifact;
@@ -170,6 +180,8 @@ final class Vm {
         }
     }
 
+    private static final int MAX_SCROLLS = 12;
+
     static final class P implements AutoCloseable {
         final String name;
         final AccessibilityNodeInfo node;
@@ -180,6 +192,8 @@ final class Vm {
         final boolean mutates;
         final String seen;
         String artifact;
+        boolean scrolled;
+        long cap;
 
         P(
                 String name,
@@ -255,6 +269,32 @@ final class Vm {
                                     : "down".equals(d) || "right".equals(d) ? 1 : 0;
                     if (dir == 0) throw new Bridge.Limit();
                     return new P(n, copy(s, a.getInt(1)), d, dir, null, null, true);
+                case "scroll_until":
+                    exact(a, 4);
+                    String ud = a.getString(2);
+                    int udir = "up".equals(ud) || "left".equals(ud) ? -1 : 1;
+                    if (!ud.matches("up|down|left|right")) throw new Bridge.Limit();
+                    return new P(
+                            n,
+                            copy(s, a.getInt(1)),
+                            ud,
+                            udir,
+                            Pred.parse(new JSONArray().put("text").put(a.getString(3)), s),
+                            null,
+                            true);
+                case "settle":
+                    exact(a, 4);
+                    P settle =
+                            new P(
+                                    n,
+                                    null,
+                                    bounded(a.getString(3), 255),
+                                    Math.min(Math.max(a.getInt(1), 0), 5_000),
+                                    null,
+                                    null,
+                                    false);
+                    settle.cap = Math.min(Math.max(a.getInt(2), 0), 10_000);
+                    return settle;
                 case "key":
                     exact(a, 2);
                     String k = a.getString(1);
@@ -344,6 +384,38 @@ final class Vm {
         }
 
         /** One bounded gesture point: screen coordinates and a time in milliseconds. */
+        /**
+         * Scrolls until the text is on screen: up to twelve pages, stopping at the end of the list.
+         * True when found; scrolling that found nothing still counts as a change.
+         */
+        private boolean scrollUntil(Ui ui, long end) throws Exception {
+            int action = Ui.scrollAction(text);
+            for (int page = 0; page <= MAX_SCROLLS; page++) {
+                if (pred.test(ui.snapshot())) return true;
+                if (page == MAX_SCROLLS || SystemClock.elapsedRealtime() > end) break;
+                long before = ui.generation();
+                boolean moved =
+                        Ui.supports(node, action)
+                                ? node.performAction(action)
+                                : Ui.pages(node, text)
+                                        && node.performAction(
+                                                arg < 0
+                                                        ? AccessibilityNodeInfo
+                                                                .ACTION_SCROLL_BACKWARD
+                                                        : AccessibilityNodeInfo
+                                                                .ACTION_SCROLL_FORWARD);
+                if (!moved) break;
+                scrolled = true;
+                // Let the list settle: the scroll lands a moment later.
+                long until = SystemClock.elapsedRealtime() + 400;
+                while (ui.generation() == before && SystemClock.elapsedRealtime() < until)
+                    Thread.sleep(25);
+                Thread.sleep(120);
+                node.refresh();
+            }
+            return false;
+        }
+
         private static JSONArray xy(int x, int y, int ms) throws Bridge.Limit {
             if (x < 0 || y < 0 || x > 65_535 || y > 65_535 || ms < 0 || ms > 30_000)
                 throw new Bridge.Limit();
@@ -363,6 +435,11 @@ final class Vm {
                     return gesture(ui, new JSONArray().put(xy(box.centerX(), box.centerY(), 1)));
                 case "long":
                     return node.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK);
+                case "scroll_until":
+                    return scrollUntil(ui, end);
+                case "settle":
+                    ui.settle(arg, cap, text, end);
+                    return true;
                 case "text":
                     Bundle b = new Bundle();
                     b.putCharSequence(

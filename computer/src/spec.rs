@@ -47,11 +47,16 @@ pub const FORMS: &[Form] = &[
     act(true, r#"tap "LABEL" [number N]"#, &[r#"tap "Wi-Fi""#, r#"tap "Save" number 2"#]),
     act(true, r#"toggle "LABEL""#, &[r#"toggle "Wi-Fi""#]),
     act(true, r#"type "TEXT" in "FIELD""#, &[r#"type "hello" in "Message""#]),
-    act(true, r#"scroll up|down|left|right [in "AREA"]"#, &["scroll down", r#"scroll down in "List""#]),
+    act(
+        true,
+        r#"scroll up|down|left|right [in "AREA"] [until "TEXT"]"#,
+        &["scroll down", r#"scroll down in "List""#, r#"scroll down until "About""#, r#"scroll down in "List" until "About""#],
+    ),
     act(true, "press back|home|recents|notifications|enter", &["press back", "press enter"]),
     act(true, r#"open app "NAME""#, &[r#"open app "Settings""#]),
     act(true, r#"open link "URL""#, &[r#"open link "https://example.com""#]),
     act(true, r#"wait for text "TEXT" up to N seconds"#, &[r#"wait for text "Done" up to 5 seconds"#]),
+    act(true, r#"then find "TEXT"|screen (a look ends the chain)"#, &[r#"tap "Save" then find "Saved""#, "tap \"Save\" then screen"]),
     act(true, r#"verify text "TEXT" exists"#, &[r#"verify text "Saved" exists"#]),
     act(
         true,

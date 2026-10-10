@@ -21,6 +21,7 @@ public final class Ui extends AccessibilityService {
     private final Object guard = new Object();
     private long generation = 1;
     private long lastInvalidation;
+    private volatile long lastEvent;
     private Scene scene;
 
     static Ui get() {
@@ -39,8 +40,34 @@ public final class Ui extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        if (shouldInvalidate(event.getEventType(), event.getContentChangeTypes())) invalidate();
+        if (shouldInvalidate(event.getEventType(), event.getContentChangeTypes())) {
+            lastEvent = SystemClock.uptimeMillis();
+            invalidate();
+        }
     }
+
+    /**
+     * Waits for the screen to react to an action and then go quiet: first up to {@value
+     * #REACTION_MS} ms for any event (an action's events arrive a moment after it; none means it
+     * changed nothing), then until {@code quietMs} pass without one and, when {@code pkg} is not
+     * empty, that app is in front. Gives up after {@code capMs} or at {@code deadline}. Best
+     * effort: a screen that never settles is reported as it is.
+     */
+    void settle(long quietMs, long capMs, String pkg, long deadline) throws InterruptedException {
+        long start = SystemClock.uptimeMillis();
+        long limit = Math.min(start + capMs, start + deadline - SystemClock.elapsedRealtime());
+        while (lastEvent < start
+                && pkg.isEmpty()
+                && SystemClock.uptimeMillis() - start < REACTION_MS
+                && SystemClock.uptimeMillis() < limit) Thread.sleep(20);
+        while (SystemClock.uptimeMillis() < limit) {
+            long quiet = SystemClock.uptimeMillis() - Math.max(lastEvent, start);
+            if (quiet >= quietMs && (pkg.isEmpty() || pkg.equals(activePackage()))) return;
+            Thread.sleep(20);
+        }
+    }
+
+    private static final long REACTION_MS = 450;
 
     @Override
     public void onInterrupt() {}

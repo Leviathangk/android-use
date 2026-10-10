@@ -17,22 +17,14 @@ use crate::{
     resolve, visual,
 };
 use serde_json::{json, Value};
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    thread,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, sync::Arc, thread, time::Duration};
 
-/// After an action, poll until accessibility events have been quiet this
-/// long (bounded by `SETTLE_LIMIT`) before summarizing the screen.
-const SETTLE_POLL: Duration = Duration::from_millis(80);
-const SETTLE_QUIET: Duration = Duration::from_millis(240);
-/// Quiet period after typing, long enough for a debounced search to show its results.
-const TYPED_QUIET: Duration = Duration::from_millis(900);
-const SETTLE_LIMIT: Duration = Duration::from_millis(1500);
-/// A launched app may need longer to cold-start than a tap needs to redraw.
-const LAUNCH_LIMIT: Duration = Duration::from_millis(5000);
+/// Quiet time the helper waits for after a change before the reply is built, and the longest it
+/// waits: a tap redraws quickly, typed text feeds debounced search lists, a launched app cold-starts.
+const QUIET_MS: u16 = 200;
+const TYPED_QUIET_MS: u16 = 900;
+const SETTLE_CAP_MS: u16 = 1500;
+const LAUNCH_CAP_MS: u16 = 5000;
 pub(crate) const SPACE_FILE: &str = "screen-space.json";
 const UNFETCHED: &str = " The captured file could not be retrieved; capture again if you need it.";
 
@@ -42,12 +34,16 @@ pub struct ModelImage {
     pub mime_type: &'static str,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub struct ModelResponse {
     pub text: String,
     pub image: Option<ModelImage>,
     /// Some steps ran, then the command stopped: the reply is an error for the client.
     pub failed: bool,
+    /// `done` after an action, `not_found` when a label was missing, empty for reads.
+    pub status: &'static str,
+    /// The device changed while the command ran.
+    pub changed: bool,
 }
 
 /// What the agent layer remembers between calls in one session.
@@ -73,11 +69,6 @@ pub(crate) struct AgentState {
     mapping: Vec<String>,
     /// Whether the last target resolved by a containing label rather than an exact one.
     loose: bool,
-    /// The last plan typed text: search and suggestion lists fill in a moment later, so the next
-    /// settle waits through a longer quiet period.
-    typed: bool,
-    /// Package the last plan launched; the next settle waits for it to be in front.
-    expect: Option<Box<str>>,
 }
 
 #[derive(Clone, Copy)]
@@ -127,7 +118,7 @@ impl Engine {
             CommandRead::ImageHash(alias) => format_image_hash(&alias, &visual::hash(self.comparable(&alias)?)?),
             CommandRead::ImageDifference(a, b) => format_image_difference(&a, &b, &visual::diff(self.comparable(&a)?, self.comparable(&b)?)?),
         };
-        Ok(ModelResponse { text, image: None, failed: false })
+        Ok(ModelResponse { text, ..Default::default() })
     }
 
     fn read_screen(&mut self, full: bool, matching: Option<&str>, delta: bool) -> Result<ModelResponse> {
@@ -146,7 +137,7 @@ impl Engine {
                 image = Some(shot);
             }
         }
-        Ok(ModelResponse { text, image, failed: false })
+        Ok(ModelResponse { text, image, ..Default::default() })
     }
 
     /// Runs a parsed action command. Consecutive actions on the same surface
@@ -194,10 +185,12 @@ impl Engine {
                 Action::Android(_) => self.android_step(group, identity.as_deref()),
                 Action::Browser(_) => self.browser_step(group, identity.as_deref()).map(|step| (step, group.len())),
                 Action::Visual(_) => self.visual_step(group).map(|step| (step, group.len())),
+                Action::Look(read) => self.look_step(read.clone()).map(|step| (step, 1)),
             };
             match result {
                 Ok((step, consumed)) => {
-                    notes.push(step.text[step.echo..].trim().to_owned());
+                    let note = &step.text[step.echo..];
+                    notes.push(if note.starts_with('\n') { note.trim_end().to_owned() } else { note.trim().to_owned() });
                     done.push(step.text);
                     if step.image.is_some() {
                         image = step.image;
@@ -231,20 +224,27 @@ impl Engine {
                 Err(error) => return Err(error),
             }
         }
-        let mut text = bounded_output(format!("Done. {}", notes.iter().filter(|note| !note.is_empty()).cloned().collect::<Vec<_>>().join(" ")).trim_end().to_owned(), 640);
+        let mut text = String::from("Done.");
+        for note in notes.iter().filter(|note| !note.is_empty()) {
+            text.push_str(if note.starts_with('\n') { "" } else { " " });
+            text.push_str(note);
+        }
+        let text = bounded_output(text, 4000);
+        let looked = matches!(actions.last(), Some(Action::Look(_)));
+        let mut text = text;
         if let (Some(shot), Some(change)) = (image_at, last_change) {
             if shot < change {
                 image = None;
                 text.push_str(" The screen image from before the last change was left out.");
             }
         }
-        if image.is_none() {
+        if image.is_none() && !looked {
             if let Some(summary) = changed.and_then(|surface| self.after_action(surface)) {
                 text.push('\n');
                 text.push_str(&summary);
             }
         }
-        Ok(ModelResponse { text, image, failed: false })
+        Ok(ModelResponse { text, image, status: "done", changed: changed.is_some(), failed: false })
     }
 
     /// A label was not on screen: nothing from that step on ran. Show what
@@ -266,20 +266,21 @@ impl Engine {
             text.push_str(&note);
             shot
         });
-        ModelResponse { text, image, failed: false }
+        ModelResponse { text, image, status: "not_found", ..Default::default() }
     }
 
     fn after_action(&mut self, surface: Surface) -> Option<String> {
         match surface {
             Surface::Android => {
-                self.settle();
                 let mut rows = self.semantic_rows("").ok()?;
-                // A tree that is still empty is a window being drawn, not a blank screen.
-                for _ in 0..2 {
-                    if !rows.is_empty() {
+                // A tree that is still empty, or a short screen that says it is loading, is a
+                // window being drawn, not the screen the action led to.
+                for _ in 0..3 {
+                    let loading = rows.len() <= 6 && rows.iter().any(|row| row.kind.is_empty() && normalized(&row.label).starts_with("loading"));
+                    if !rows.is_empty() && !loading {
                         break;
                     }
-                    self.settle();
+                    thread::sleep(Duration::from_millis(500));
                     rows = self.semantic_rows("").ok()?;
                 }
                 // The agent has seen the last screen, so on the same screen only the changes are
@@ -293,29 +294,6 @@ impl Engine {
                 Some(text)
             }
             Surface::Browser => self.read_page().ok().map(|page| format!("Now: {}", format_browser_page(&page))),
-        }
-    }
-
-    /// Waits until the UI generation stops changing so the summary shows the
-    /// screen an action led to rather than a transition. Bounded and
-    /// best-effort: a continuously animating screen is summarized as-is.
-    fn settle(&mut self) {
-        let expect = self.agent.expect.take();
-        let quiet = if std::mem::take(&mut self.agent.typed) { TYPED_QUIET } else { SETTLE_QUIET };
-        let limit = if expect.is_some() { LAUNCH_LIMIT } else { SETTLE_LIMIT };
-        let started = Instant::now();
-        let (mut last, mut quiet_since) = (None, Instant::now());
-        while started.elapsed() < limit {
-            thread::sleep(SETTLE_POLL);
-            let Ok((generation, _, package)) = self.bridge_read(|bridge| bridge.status_full()) else { return };
-            if last != Some(generation) {
-                (last, quiet_since) = (Some(generation), Instant::now());
-            }
-            // An older helper reports no package; then only quiet counts.
-            let in_front = expect.as_deref().is_none_or(|want| package.as_deref().is_none_or(|front| front == want));
-            if in_front && quiet_since.elapsed() >= quiet {
-                return;
-            }
         }
     }
 
@@ -364,13 +342,11 @@ impl Engine {
                     // the screen it leads to, so it is compiled only after that screen is up.
                     if index + 1 < actions.len() && navigates(action) {
                         let step = self.run_android(&actions[..=index], ops, &scene, identity)?;
-                        self.settle();
                         return Ok((step, index + 1));
                     }
                 }
                 Err(error) if resolve::is_screen_miss(&error) && ops.iter().any(|op| op.mutates() || matches!(op, Op::Wait(..))) => {
                     let step = self.run_android(&actions[..index], ops, &scene, identity)?;
-                    self.settle();
                     return Ok((step, index));
                 }
                 Err(error) => return Err(error),
@@ -383,8 +359,16 @@ impl Engine {
         if ops.len() > MAX_OPS || ops.iter().filter(|op| op.mutates()).count() > usize::from(MAX_MUTATIONS) {
             return Err(Error::new(Code::Bounds, "the action command exceeds its safety limit"));
         }
-        self.agent.typed = ops.iter().any(|op| matches!(op, Op::Text(..)));
-        self.agent.expect = ops.iter().rev().find_map(|op| if let Op::Launch(package) = op { Some(package.clone()) } else { None });
+        let mut ops = ops;
+        if ops.iter().any(Op::mutates) {
+            let package = ops.iter().rev().find_map(|op| if let Op::Launch(package) = op { Some(package.clone()) } else { None });
+            let typed = ops.iter().any(|op| matches!(op, Op::Text(..)));
+            ops.push(Op::Settle {
+                quiet_ms: if typed { TYPED_QUIET_MS } else { QUIET_MS },
+                cap_ms: if package.is_some() { LAUNCH_CAP_MS } else { SETTLE_CAP_MS },
+                package: package.unwrap_or_default(),
+            });
+        }
         let plan = Plan {
             id: self.operation_id(identity, "android").into_boxed_str(),
             generation: scene.generation,
@@ -448,6 +432,13 @@ impl Engine {
             A::Type { text, target } => Op::Text(self.resolve_target_as(scene, target, "edit")?, text.clone()),
             A::Scroll { direction, target } => Op::Scroll(self.resolve_target_as(scene, target, "scroll")?, *direction),
             A::ScrollScreen(direction) => Op::Scroll(self.main_scroller(scene, *direction)?, *direction),
+            A::ScrollUntil { direction, target, text } => {
+                let area = match target {
+                    Some(target) => self.resolve_target_as(scene, target, "scroll")?,
+                    None => self.main_scroller(scene, *direction)?,
+                };
+                Op::ScrollUntil(area, *direction, text.clone())
+            }
             A::Key(key) => Op::Key(*key),
             A::WaitTarget { target, seconds } => Op::Wait(Predicate::Exists(Match::Label(target.label.clone())), seconds.saturating_mul(1000)),
             A::WaitText { text, seconds } => Op::Wait(Predicate::Text(text.clone()), seconds.saturating_mul(1000)),
@@ -599,6 +590,12 @@ impl Engine {
         let bytes = self.remember("page screenshot", bytes);
         text.push_str(" The page image is attached.");
         Ok(Step { text, echo, image: Some(ModelImage { mime_type: mime_type(&bytes), bytes }), changed })
+    }
+
+    /// A read in the middle of a chain: what it shows closes the result, instead of a summary.
+    fn look_step(&mut self, read: CommandRead) -> Result<Step> {
+        let response = self.model_read(read)?;
+        Ok(Step { text: format!("\n{}", response.text), echo: 0, image: response.image, changed: None })
     }
 
     fn visual_step(&mut self, actions: &[Action]) -> Result<Step> {
@@ -765,8 +762,9 @@ fn deadline(actions: &[Action]) -> u32 {
                 | AndroidAction::WaitScreenChange { seconds }
                 | AndroidAction::Microphone(seconds)
                 | AndroidAction::ScreenRecord(seconds),
-            )
-            | Action::Browser(BrowserAction::WaitText { seconds, .. } | BrowserAction::WaitCss { seconds, .. }) => u32::from(*seconds) * 1000 + 1000,
+            ) => u32::from(*seconds) * 1000 + 1000,
+            Action::Android(AndroidAction::ScrollUntil { .. }) => 14_000,
+            Action::Browser(BrowserAction::WaitText { seconds, .. } | BrowserAction::WaitCss { seconds, .. }) => u32::from(*seconds) * 1000 + 1000,
             _ => 0,
         })
         .max()
@@ -777,7 +775,7 @@ fn deadline(actions: &[Action]) -> u32 {
 fn target_label(action: &AndroidAction) -> String {
     use AndroidAction as A;
     match action {
-        A::Tap(t) | A::Toggle(t) | A::Hold(t) | A::Type { target: t, .. } | A::Scroll { target: t, .. } => t.label.to_string(),
+        A::Tap(t) | A::Toggle(t) | A::Hold(t) | A::Type { target: t, .. } | A::Scroll { target: t, .. } | A::ScrollUntil { target: Some(t), .. } => t.label.to_string(),
         _ => String::new(),
     }
 }
@@ -796,7 +794,7 @@ fn is_media(action: &Action) -> bool {
 fn changes_screen(action: &Action) -> bool {
     use {AndroidAction as A, BrowserAction as B};
     let check = matches!(action, Action::Android(A::WaitTarget { .. } | A::WaitText { .. } | A::VerifyExists(_) | A::VerifyGone(_) | A::VerifyText(_)));
-    !check && !is_media(action) && !matches!(action, Action::Visual(_) | Action::Browser(B::WaitText { .. } | B::WaitCss { .. } | B::Screenshot))
+    !check && !is_media(action) && !matches!(action, Action::Visual(_) | Action::Look(_) | Action::Browser(B::WaitText { .. } | B::WaitCss { .. } | B::Screenshot))
 }
 
 /// A stored reply, handed out again for a resent request.

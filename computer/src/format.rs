@@ -435,6 +435,7 @@ pub(crate) fn describe_action(action: &Action) -> String {
             A::Type { target, .. } => format!("type into {}", quoted(&target.label)),
             A::Scroll { direction, target } => format!("scroll {} in {}", format!("{direction:?}").to_lowercase(), quoted(&target.label)),
             A::ScrollScreen(direction) => format!("scroll {}", format!("{direction:?}").to_lowercase()),
+            A::ScrollUntil { direction, text, .. } => format!("scroll {} until {}", format!("{direction:?}").to_lowercase(), quoted(text)),
             A::Key(key) => format!("press {}", format!("{key:?}").to_lowercase()),
             A::WaitTarget { target, .. } => format!("wait for {}", quoted(&target.label)),
             A::WaitText { text, .. } => format!("wait for text {}", quoted(text)),
@@ -473,6 +474,7 @@ pub(crate) fn describe_action(action: &Action) -> String {
             B::NewTab(url) => format!("new tab {}", quoted(url)),
         },
         Action::Visual(_) => "crop the image".into(),
+        Action::Look(_) => "read the screen".into(),
     }
 }
 
@@ -490,6 +492,7 @@ fn done_phrase(action: &Action) -> String {
         Action::Android(A::VerifyGone(t)) => format!("verified {} is gone", short(&t.label)),
         Action::Android(A::VerifyText(text)) => format!("verified that {} appeared", short(text)),
         Action::Android(A::Scroll { direction, .. } | A::ScrollScreen(direction)) => format!("scrolled {}", format!("{direction:?}").to_lowercase()),
+        Action::Android(A::ScrollUntil { direction, text, .. }) => format!("scrolled {} until {} appeared", format!("{direction:?}").to_lowercase(), short(text)),
         Action::Android(A::Key(key)) => format!("pressed {}", format!("{key:?}").to_lowercase()),
         Action::Android(A::OpenApp(name)) => format!("opened {}", short(name)),
         Action::Android(A::OpenSetting(name)) => format!("opened {} settings", short(name)),
@@ -519,6 +522,7 @@ fn done_phrase(action: &Action) -> String {
         Action::Browser(B::CloseTab(t)) => format!("closed the {} tab", short(&t.label)),
         Action::Browser(B::NewTab(_)) => "opened a new tab".into(),
         Action::Visual(_) => "cropped the image".into(),
+        Action::Look(_) => "looked".into(),
     }
 }
 
@@ -557,7 +561,9 @@ pub(crate) fn failure_text(receipt: &Receipt, actions: &[Action]) -> String {
     let step = receipt.at.map(usize::from).filter(|index| *index < actions.len()).map(|index| (index, &actions[index]));
     let what = step.map_or_else(|| "run the command".to_owned(), |(_, action)| describe_action(action));
     let which = step.map_or_else(|| "a later step".to_owned(), |(index, action)| format!("step {} of {} ({})", index + 1, actions.len(), describe_action(action)));
-    let text = if receipt.m > 0 && receipt.e.as_deref() == Some("unknown") {
+    let text = if let (Some((_, Action::Android(AndroidAction::ScrollUntil { text, .. }))), true) = (step, receipt.e.as_deref() == Some("partial")) {
+        format!("Scrolled, but {} did not appear; the list may have ended. The screen has moved: read it before doing anything else.", quoted(text))
+    } else if receipt.m > 0 && receipt.e.as_deref() == Some("unknown") {
         format!("Partly done, and uncertain: at least {} change(s) were made, and {which} may or may not have finished. Read the screen before doing anything else, and do not repeat the whole command.", receipt.m)
     } else if receipt.m > 0 || receipt.e.as_deref() == Some("partial") {
         format!("Partly done: {} change(s) were made before {which} failed. Read the screen before doing anything else, and do not repeat the whole command.", receipt.m)

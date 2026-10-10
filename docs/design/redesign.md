@@ -1,6 +1,6 @@
 # Android Use: from-scratch redesign proposal
 
-Status: proposal. Nothing in this document is implemented yet.
+Status: proposal. Nothing in this document is implemented yet. Sequencing for these stages is now tracked as Tracks A, S and P in [roadmap.md](roadmap.md), together with the [emulator plan](android-emulator-integration.md). Where the two documents disagree on order, the roadmap wins.
 
 This proposal comes from a full read of the repository at `5509535`: the Rust host (`computer/`, about 5.3k lines), the Android helper (`device/`, about 1.6k lines), `tools/` (about 3.1k lines), the docs, and CI. Every claim marked as a defect below was checked against the code. Latency figures are estimates derived from the code paths, not measurements.
 
@@ -228,7 +228,7 @@ Camera, microphone, screen recording, location and notifications move behind a h
 - **CI.** Cache cargo and gradle, run on `pull_request` plus `push` to `main` only, and use prebuilt `cargo-audit` and `cargo-deny`. Run the docs, grammar and golden gates on every PR. Add a nightly emulator job that drives the *shipped* grammar; today `live` and `benchmark` drive the deprecated JSON path (`tools/src/main.rs:205-216`).
 - **Tests.** Add a fake adb server and fake helper speaking the frame protocol, so handshake, reconnect, seq mismatch and receipt mapping get covered. Fuzz `grammar::parse` and the frame decoder with `cargo-fuzz`. Add an emulator test for settle and diff.
 - **Delete the oxlint anti-slop plugin**, or keep two rules. Its attribution is also missing from THIRD_PARTY_NOTICES.
-- **Rename before the identity sets.** The `applicationId` is `dev.codex.aubridge`, and setup prints internals ("UI generation 44", "Capability mask").
+- **Rename before the identity sets.** *Amended 2026-10-10:* renaming `applicationId` breaks in-place upgrades and the component name used by emulator provisioning. Decide this before emulator Phase 4; the recommendation is to keep the id and rename only the user-visible labels (see [roadmap.md](roadmap.md) §3). The `applicationId` is `dev.codex.aubridge`, and setup prints internals ("UI generation 44", "Capability mask").
 
 ## 4. Expected effect
 
@@ -246,7 +246,7 @@ These are estimates from the code paths above. Validate them with the benchmark 
 
 ## 5. Recommended path: staged, not big-bang
 
-A rewrite is not needed to capture most of this. Each stage below ships on its own.
+A rewrite is not needed to capture most of this. Each stage below ships on its own. *Amended 2026-10-10:* the emulator review found two more correctness defects. Operation IDs repeat across MCP sessions (`engine.rs:659-667`), and two transports that share a serial can be silently mis-resolved (`device.rs:142-148`). Both are scheduled in emulator Phase 2. Stage 5's removal of legacy JSON must wait until the live harnesses move to the shipped grammar (roadmap Q2).
 
 1. **Stop lying to the agent** (days). Fix §2.2 items 1–4 and 7–10: a complete synthetic unknown receipt, stop-on-first-non-ok, `isError`, removal of the substring fallback (or making it return `ambiguous`), truncation counts placed first, `-32601`/`ping`, the mic capability, and a fuzzer on the real grammar. Regenerate protocol.md from the parser.
 2. **One round trip plus diff** (largest win). Make on-device resolve, settle with the gesture callback, and diff the receipt. Add `structuredContent`.

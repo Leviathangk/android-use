@@ -87,6 +87,7 @@ mod flows {
                     generation += 1;
                     json!([seq, 1, generation, 0])
                 }
+                "run" if screen == "settings" && q[6].as_array().unwrap().iter().any(|op| op[0] == "tap" && op[1] == 1) => return, // Tapping "Bluetooth" drops the connection mid-plan.
                 "run" => {
                     let mut changes = 0;
                     let (mut failed, mut artifact) = (None, None);
@@ -95,6 +96,7 @@ mod flows {
                             "launch" => (screen, generation, changes) = ("settings", generation + 1, changes + 1),
                             "tap" | "tap_point" => (generation, changes) = (generation + 1, changes + 1),
                             "capture" => artifact = Some("a1"),
+                            "wait" => generation += 1, // The screen changes by itself.
                             "assert" => {
                                 let present = labels(screen).contains(&op[1][1][1].as_str().unwrap());
                                 if present != (op[1][0] == "exists") {
@@ -140,8 +142,7 @@ mod flows {
     }
 
     fn act(engine: &mut Engine, command: &str) -> Result<ModelResponse> {
-        // A real client sends a fresh request id per call; the command text stands in for it.
-        engine.model_act(&parse_act_command(command).unwrap(), Some(command))
+        engine.model_act(&parse_act_command(command).unwrap(), None)
     }
 
     #[test]
@@ -157,6 +158,12 @@ mod flows {
         let response = act(&mut engine, r#"tap "Wi-Fi" then tap "Settings""#).unwrap();
         assert!(response.text.starts_with(r#"No item labeled "Wi-Fi" is on the current screen. Nothing was run."#), "{}", response.text);
         assert!(response.text.contains("On screen now:\nSettings — button"), "{}", response.text);
+        // A resent request id gets its first reply, even though its label has gone since.
+        let tap = parse_act_command(r#"tap "Settings""#).unwrap();
+        let first = engine.model_act(&tap, Some("7")).unwrap().text;
+        act(&mut engine, r#"open app "Settings""#).unwrap();
+        assert_eq!(engine.model_act(&tap, Some("7")).unwrap().text, first);
+        assert!(engine.model_act(&tap, Some("8")).unwrap().text.contains("Nothing was run"));
     }
 
     #[test]
@@ -195,25 +202,36 @@ mod flows {
         assert_eq!(next.map_point(10, 20).unwrap(), (21, 41));
         assert_eq!(next.agent.mapping, vec!["image point 10,20 is device pixel 21,41".to_owned()]);
         assert!(next.map_point(100, 5).unwrap_err().message.contains("outside the 100×200"));
+        next.agent.space = None;
+        next.save_image_space();
+        engine.load_image_space();
+        assert_eq!((engine.agent.space, engine.agent.shape), (None, Some(ImageSpace { device: (200, 400), image: (100, 200) })), "an ended image keeps its shape");
     }
 
     #[test]
-    fn a_captured_screen_is_compressed_and_its_coordinates_map_back_to_the_device() {
+    fn a_point_after_a_change_in_the_same_command_is_refused_before_anything_runs() {
         let (mut engine, _dir) = engine();
-        assert_eq!(act(&mut engine, "tap point 1 1").err().map(|e| e.code), Some(Code::Missing), "no image, no coordinates");
-        let shot = act(&mut engine, "capture screen").unwrap();
-        let image = shot.image.expect("the screen image is attached");
-        let sent = visual::decode(&image.bytes).unwrap();
-        assert_eq!((sent.w, sent.h), (706, 1568), "shrunk to the model's own limit");
-        assert!(image.bytes.len() < 60_000, "{} bytes", image.bytes.len());
-        assert!(shot.text.contains("706×1568 pixels, scaled down from the 1080×2400 device screen"), "{}", shot.text);
-        let outside = act(&mut engine, "tap point 900 20").err().unwrap();
-        assert_eq!(outside.code, Code::Bounds);
-        assert!(outside.message.contains("outside the 706×1568 screen image"), "{}", outside.message);
-        let tapped = act(&mut engine, "tap point 353 784").unwrap();
-        assert!(tapped.text.contains("image point 353,784 is device pixel 540,1200"), "{}", tapped.text);
-        // The tap changed the screen, so the old image no longer names where things are.
-        assert_eq!(act(&mut engine, "tap point 10 10").err().map(|e| e.code), Some(Code::Missing));
+        act(&mut engine, "capture screen").unwrap();
+        let error = act(&mut engine, r#"open app "Settings" then tap point 353 784"#).err().unwrap();
+        assert!(error.message.contains(r#"capture screen again after open app "Settings""#) && error.message.ends_with("nothing was run."), "{}", error.message);
+        assert!(act(&mut engine, "tap point 1 1 then swipe from 1 1 to 9 9 over 300 milliseconds").is_err());
+        assert!(engine.agent.space.is_some() && engine.model_read(CommandRead::Screen { full: false, matching: None, delta: false }).unwrap().text.starts_with("Settings"));
+    }
+
+    #[test]
+    fn anything_that_may_have_changed_the_screen_ends_its_image() {
+        let (mut engine, _dir) = engine();
+        engine.agent.shape = Some(ImageSpace { device: (2400, 1080), image: (1568, 706) });
+        assert!(act(&mut engine, "capture screen").unwrap().text.contains("now portrait 1080×2400 (was landscape 2400×1080)"), "a rotation after the image ended");
+        act(&mut engine, "wait for screen change up to 2 seconds").unwrap();
+        assert_eq!(engine.agent.space, None, "a change seen by a wait");
+        act(&mut engine, "capture screen").unwrap();
+        let response = act(&mut engine, r#"capture screen then open app "Settings""#).unwrap();
+        assert!(response.image.is_none() && response.text.contains("left out") && response.text.contains("Now on screen:\nWi-Fi"), "{}", response.text);
+        assert_eq!(engine.agent.space, None, "an image from before a change in the same command");
+        act(&mut engine, "capture screen").unwrap();
+        assert_eq!(act(&mut engine, r#"tap "Bluetooth""#).err().map(|e| e.code), Some(Code::Unknown));
+        assert_eq!(engine.agent.space, None, "an unknown outcome");
     }
 
     #[test]
@@ -231,6 +249,8 @@ mod flows {
         let error = act(&mut engine, "capture screen then take rear camera photo").err().unwrap();
         assert_eq!(error.code, Code::Bounds);
         assert!(error.message.contains("nothing was run"), "{}", error.message);
+        let apart = act(&mut engine, r#"capture screen then page click "Buy" then capture screen"#).err().unwrap();
+        assert!(apart.message.contains("nothing was run"), "{}", apart.message);
     }
 
     #[test]

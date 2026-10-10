@@ -82,11 +82,13 @@ The release archive contains `au` and the Android Use helper together. Keep them
 
 ## Use Android Use in your agent
 
-If you want to use Android Use in Codex, Cursor, Claude Code, OpenClaw, Hermes, or another coding agent, paste this prompt into the agent:
+Paste this into Codex, Claude Code, Cursor, Gemini CLI, OpenCode, or another coding agent:
 
 ```text
-Set up Android Use from the official release or repository. Preserve unrelated files, credentials, enrollments, and agent settings. Keep au beside aubridge.apk. Run au setup with one unlocked, USB-debugging-authorized device; pause for Android's Accessibility approval and resume with au doctor. Configure a local stdio MCP server using the absolute au path and serve --mcp. Verify with android_read command status and android_read command screen. Use the two command-string tools for normal work. Never use raw ADB, bypass Android prompts, or replay a partial or unknown mutation.
+Run `npx -y android-use setup`, follow its prompts, then use android_read and android_act.
 ```
+
+`setup` installs the Android helper, registers Android Use with every agent it finds, and ends with a live read of your screen. Prefer a package manager? `brew install austinintelligence/tap/android-use` or the [install script](docs/getting-started.md) give you the same `au` command; then run `au setup`.
 
 Then ask: “Open Settings and tell me which Wi-Fi network is connected.”
 
@@ -94,13 +96,15 @@ The full fallback runbook and manual commands are in the [Agent installation and
 
 ## Connect an AI agent
 
-Register `au serve --mcp` as a local MCP server, using the absolute path to `au`. For Claude Code:
+`au setup` does this for every agent it finds. To do it yourself, or for one agent:
 
 ```bash
-claude mcp add android-use --scope user -- /ABSOLUTE/PATH/TO/au serve --mcp
+au install claude      # also: codex, cursor, gemini, vscode, claude-desktop, opencode, all
+au install --dry-run   # show what would change; nothing is written
+au uninstall claude    # remove only the android-use entry
 ```
 
-Codex, Cursor, VS Code, and Claude Desktop configs are in [client setup](docs/agents/clients.md). The agent receives two focused tools:
+Only the `android-use` entry is added, updated, or removed; every other entry stays as it was. [Client details →](docs/agents/clients.md). The agent receives two focused tools:
 
 - `android_read` sees what is happening: `screen`, `page`, `notifications`, ...
 - `android_act` performs the next small action: `tap "Wi-Fi"`, `type "hello" in "Message"`, ...

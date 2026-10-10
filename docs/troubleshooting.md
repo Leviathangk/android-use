@@ -32,7 +32,7 @@ The server starts even without a device, so the tool result explains the problem
 - *The enrolled Android device is not connected*: reconnect and unlock it.
 - *Accessibility service is off*: enable it as above.
 
-If the client cannot start the server at all, check that its configuration uses the absolute path to `au` and the arguments `serve --mcp` ([client setup](agents/clients.md)).
+If the client cannot start the server at all, run `au install --dry-run` to see what is registered, and check that its configuration runs `au` (an absolute path for desktop apps) with the arguments `serve --mcp` ([client setup](agents/clients.md)).
 
 ## "No item labeled … is on the current screen"
 

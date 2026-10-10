@@ -9,7 +9,7 @@ The goal is simple: connect one Android device, approve two Android prompts, and
 - A Windows x86_64, macOS Apple Silicon, or Linux x86_64 computer. See [Releases](https://github.com/austinintelligence/android-use/releases) for the current archive list.
 - Permission to change developer and accessibility settings on the Android device.
 
-Download and unzip the matching Android Use release archive before starting. It contains both `au` and the matching Android helper. Keep those files together.
+Get `au` with `npx -y android-use setup` (npm), `brew install austinintelligence/tap/android-use`, or by unzipping the matching [release archive](https://github.com/austinintelligence/android-use/releases). The release `au` carries the Android helper, so nothing needs to sit beside it.
 
 ## 1. Turn on USB debugging
 

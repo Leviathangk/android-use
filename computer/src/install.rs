@@ -80,7 +80,7 @@ fn install_helper_step() -> Value {
         "Install the Android Use helper",
         &[
             "The device is authorized. Android Use can install its bundled helper without changing unrelated apps.",
-            "Keep au and aubridge.apk together in the same release directory.",
+            "Release builds of au carry the helper; with a development build keep aubridge.apk beside au.",
         ],
         "Run au setup --json.",
         Some("au setup --json"),
@@ -106,7 +106,7 @@ fn ready_step() -> Value {
         "ready",
         "Android Use is ready for an agent",
         &[
-            "Configure the local MCP server with the absolute path to au and the arguments serve --mcp, then reload the agent.",
+            "Register the MCP server with an agent: au install claude (or codex, cursor, gemini, vscode, claude-desktop, opencode), then reload the agent.",
             "Verify with android_read status, then android_read screen, without changing the device.",
             "Shell-only agents can use the same commands directly: au read screen, au act 'tap \"LABEL\"'.",
         ],
@@ -144,10 +144,7 @@ pub fn setup(apk: Option<&Path>, wait_for_approval: bool) -> Result<Value> {
     let paths = Paths::discover()?;
     let adb = Adb::discover()?;
     let (device, enrolled_now) = adb.resolve_or_enroll(&paths)?;
-    let apk = apk.map(PathBuf::from).or_else(bundled_apk).ok_or_else(|| Error::new(Code::Args, "pass the AU Bridge APK path or place aubridge.apk beside au"))?;
-    if !apk.is_file() {
-        return Err(Error::new(Code::Args, "AU Bridge APK was not found"));
-    }
+    let apk = apk_to_install(apk, &paths)?;
     adb.wait_boot_completed(&device.endpoint, std::time::Duration::from_secs(120))?;
     adb.install(&device, &apk)?;
     adb.start_helper(&device)?;
@@ -299,6 +296,31 @@ pub fn uninstall() -> Result<Value> {
     let _ = fs::remove_dir_all(&paths.artifacts);
     Ok(json!({"ok":1,"uninstalled":1,"local_state_removed":1}))
 }
+/// The helper APK to install: the path given, else `aubridge.apk` beside `au`, else the copy built
+/// into release binaries (written to private state first, after its hash is checked).
+fn apk_to_install(given: Option<&Path>, paths: &Paths) -> Result<PathBuf> {
+    if let Some(path) = given.map(PathBuf::from).or_else(bundled_apk) {
+        return if path.is_file() { Ok(path) } else { Err(Error::new(Code::Args, "AU Bridge APK was not found")) };
+    }
+    let bytes = embedded_apk().ok_or_else(|| Error::new(Code::Args, "pass the AU Bridge APK path or place aubridge.apk beside au"))?;
+    let path = paths.root.join("aubridge.apk");
+    fs::write(&path, bytes)?;
+    Ok(path)
+}
+
+#[cfg(embedded_apk)]
+fn embedded_apk() -> Option<&'static [u8]> {
+    use sha2::{Digest, Sha256};
+    static APK: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/aubridge.apk"));
+    let hash: String = Sha256::digest(APK).iter().map(|b| format!("{b:02x}")).collect();
+    (hash == env!("AU_APK_SHA256")).then_some(APK)
+}
+
+#[cfg(not(embedded_apk))]
+fn embedded_apk() -> Option<&'static [u8]> {
+    None
+}
+
 fn bundled_apk() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let p = exe.parent()?.join("aubridge.apk");

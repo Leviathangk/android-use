@@ -3,6 +3,7 @@
 use au::{
     adapter,
     api::{parse_act_command, parse_read_command, Code, Error, Read, Result},
+    clients::{self, Client, Dirs, Options},
     engine::{plain_error, Engine, ModelResponse},
     install,
 };
@@ -58,18 +59,63 @@ fn run(human: bool) -> Result<Value> {
             model_value(&engine, response)?
         }
         "enroll" => install::enroll(a.get(1).ok_or_else(|| Error::new(Code::Args, "enroll requires an ADB endpoint"))?)?,
-        "setup" | "repair" => install::setup(a.get(1).map(Path::new), human)?,
+        "install" | "uninstall" if a.get(1).is_some_and(|name| !name.starts_with("--")) || a[0] == "install" => agents(&a)?,
+        "setup" | "repair" => {
+            let mut value = install::setup(a.get(1).filter(|arg| !arg.starts_with("--")).map(Path::new), human)?;
+            if value["ready"] == 1 && !a.iter().any(|arg| arg == "--no-agents") {
+                // One command from a fresh machine to a working agent: register with every
+                // agent found, then prove it with a real read.
+                value["agents"] = clients::detect_and_install(&Dirs::from_env()?, Options::default());
+                value["check"] = check_device();
+            }
+            value
+        }
         "update" => install::update(a.get(1).map(Path::new), human)?,
         "doctor" => install::doctor()?,
         "uninstall" => install::uninstall()?,
         "version" | "--version" => serde_json::json!({"version":env!("CARGO_PKG_VERSION")}),
         "help" | "--help" | "-h" => {
-            serde_json::json!({"commands":["devices","setup [APK]","status","doctor","update [APK]","uninstall","enroll ENDPOINT","repair [APK]","serve --mcp","read COMMAND","act COMMAND"]})
+            serde_json::json!({"commands":["devices","setup [APK]","status","doctor","update [APK]","uninstall","enroll ENDPOINT","repair [APK]","serve --mcp","read COMMAND","act COMMAND","install [AGENT|all] [--dry-run] [--force]","uninstall AGENT"]})
         }
         _ => return Err(Error::new(Code::Args, format!("unknown command: {}", a[0]))),
     };
     Ok(out)
 }
+/// `au install [AGENT|all] [--dry-run] [--force]` and `au uninstall AGENT`: register or remove the
+/// MCP server (and skill) for the named agents, or for every agent found.
+fn agents(a: &[String]) -> Result<Value> {
+    let (dirs, options) = (Dirs::from_env()?, Options { dry_run: a.iter().any(|arg| arg == "--dry-run"), force: a.iter().any(|arg| arg == "--force") });
+    let named: Vec<&String> = a[1..].iter().filter(|arg| !arg.starts_with("--")).collect();
+    let targets: Vec<Client> = if named.is_empty() || named.iter().any(|name| name.as_str() == "all") {
+        clients::ALL.into_iter().filter(|client| client.present(&dirs)).collect()
+    } else {
+        named
+            .iter()
+            .map(|name| {
+                Client::parse(name)
+                    .ok_or_else(|| Error::new(Code::Args, format!("unknown agent {name}; use claude, codex, cursor, gemini, vscode, claude-desktop, opencode, or all")))
+            })
+            .collect::<Result<_>>()?
+    };
+    let results: Vec<Value> = targets
+        .into_iter()
+        .map(|client| clients::report(if a[0] == "install" { clients::install(client, &dirs, options) } else { clients::uninstall(client, &dirs, options) }, client))
+        .collect();
+    let failed = results.iter().any(|result| result["action"] == "error");
+    Ok(serde_json::json!({"ok": u8::from(!failed), "agents": results, "found": results.len()}))
+}
+
+/// A live read after setup: the status line and the first lines of the screen.
+fn check_device() -> Value {
+    let mut engine = match Engine::open() {
+        Ok(engine) => engine,
+        Err(error) => return Value::String(error.message),
+    };
+    let status = engine.model_read(parse_read_command("status").unwrap_or(au::api::CommandRead::Status)).map(|r| r.text);
+    let screen = engine.model_read(au::api::CommandRead::Screen { full: false, matching: None, delta: false }).map(|r| r.text.lines().take(6).collect::<Vec<_>>().join("\n"));
+    Value::String(format!("{}\n{}", status.unwrap_or_else(|e| e.message), screen.unwrap_or_else(|e| e.message)))
+}
+
 /// Plain-command results for the CLI. An attached image is saved to the
 /// private artifact folder and its path is returned instead of inline bytes.
 fn model_value(engine: &Engine, response: ModelResponse) -> Result<Value> {
@@ -129,9 +175,21 @@ fn human_value(command: &str, value: &Value) -> String {
                 out.push_str("\n✓ Opened the right Android settings screen");
             }
             out.push_str(&human_next_step(value));
+            if let Some(agents) = value.get("agents").and_then(Value::as_array) {
+                for row in agents {
+                    out.push_str(&format!("\n{} {}: {}", if row["action"] == "error" || row["action"] == "manual" { "!" } else { "✓" }, row["client"].as_str().unwrap_or(""), row["action"].as_str().unwrap_or("")));
+                }
+            }
+            if let Some(check) = value.get("check").and_then(Value::as_str) {
+                out.push_str(&format!("\n\nLive check:\n{check}"));
+            }
             out
         }
         "doctor" => human_doctor(value),
+        "install" | "uninstall" if value.get("agents").is_some() => {
+            let rows = value["agents"].as_array().map(|rows| rows.iter().map(|row| format!("{} {}: {}{}", if row["action"] == "error" || row["action"] == "manual" { "!" } else { "✓" }, row["client"].as_str().unwrap_or(""), row["action"].as_str().unwrap_or(""), row["detail"].as_str().filter(|d| !d.is_empty()).map(|d| format!(" ({d})")).unwrap_or_default())).collect::<Vec<_>>()).unwrap_or_default();
+            if rows.is_empty() { "No supported agent found. Name one: au install claude|codex|cursor|gemini|vscode|claude-desktop|opencode".into() } else { rows.join("\n") }
+        }
         "uninstall" => "Android Use was removed from the enrolled device.\n\nLocal Android Use state was removed too.".into(),
         _ => serde_json::to_string_pretty(value).unwrap_or_else(|_| "Android Use returned an unreadable result.".into()),
     }

@@ -154,20 +154,6 @@ impl Engine {
                 }
                 Ok(json!({"ok":1,"g":g,"cap":cap}))
             }
-            Read::Observe { base, detail } => {
-                let scene = match self.bridge_read(|bridge| bridge.observe(base.as_deref(), detail)).and_then(|seen| self.journal.reconcile(ANDROID).map(|_| seen))? {
-                    Observation::Unchanged(g) => return Ok(json!({"=":1,"o":base.unwrap_or_else(||g.to_string().into()),"g":g})),
-                    Observation::Scene(scene) => scene,
-                };
-                let out = if detail == 0 {
-                    scene.json()
-                } else {
-                    let bytes = serde_json::to_vec(&scene.json()).map_err(|e| Error::new(Code::Protocol, e.to_string()))?;
-                    json!({"o":scene.observation,"g":scene.generation,"artifact":self.artifacts.put(&bytes)?})
-                };
-                self.scene = Some(scene);
-                Ok(out)
-            }
             Read::Browser { op } => self.browser_read(|browser| browser.read(op.clone())).and_then(|page| self.journal.reconcile(BROWSER).map(|_| page)),
             Read::Capabilities => self.bridge_read(|bridge| bridge.query("capabilities", Value::Null)),
             Read::Location => self.bridge_read(|bridge| bridge.query("location", Value::Null)),
@@ -349,20 +335,6 @@ mod tests {
     fn a_lost_chrome_capture_is_reported_not_silent() {
         let r = browser_receipt("x", &Outcome { generation: 3, mutations: 0, at: None, error: None, partial: false, artifact: None }, Some(Err(Error::new(Code::Io, "full"))));
         assert_eq!((r.ok, r.e.as_deref(), r.artifact), (1, Some("artifact"), None));
-    }
-
-    #[test]
-    fn a_legacy_observe_settles_an_orphaned_android_record() {
-        let d = tempfile::tempdir().unwrap();
-        let mut engine = Engine::at(Paths::at(d.path().to_path_buf()).unwrap()).unwrap();
-        Journal::open(&engine.paths).unwrap().begin("lost", 1, &"a".repeat(64), ANDROID).unwrap();
-        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
-        let device = Device { endpoint: "t".into(), hardware: "t".into() };
-        engine.attach(Bridge::over(std::net::TcpStream::connect(listener.local_addr().unwrap()).unwrap(), device.clone()), device);
-        let mut helper = listener.accept().unwrap().0;
-        std::io::Write::write_all(&mut helper, b"\0\0\0\x07[1,0,5]").unwrap();
-        engine.read(Read::Observe { base: Some("5".into()), detail: 0 }).unwrap();
-        assert!(engine.journal.begin("next", 2, &"b".repeat(64), ANDROID).unwrap().is_none(), "the observe lifted the fence");
     }
 
     #[test]

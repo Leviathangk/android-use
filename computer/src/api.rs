@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
-use std::{fmt, ops::Range as StdRange};
+use std::fmt;
 pub const MAX_FRAME: usize = 1_048_576;
 pub const MAX_INLINE: usize = 2800;
 pub const MAX_OPS: usize = 32;
@@ -104,7 +104,6 @@ pub enum Req {
 #[derive(Debug, Clone, PartialEq)]
 pub enum Read {
     Status,
-    Observe { base: Option<Box<str>>, detail: u8 },
     Browser { op: BrowserRead },
     Capabilities,
     Location,
@@ -123,15 +122,6 @@ pub enum BrowserRead {
 pub struct Range {
     pub start: u64,
     pub end: u64,
-}
-
-impl Range {
-    pub fn bounded(self, size: u64) -> Result<StdRange<usize>> {
-        if self.start > self.end || self.end > size || self.end - self.start > MAX_INLINE as u64 {
-            return Err(Error::new(Code::Bounds, "artifact range is invalid or exceeds 2800 bytes"));
-        }
-        Ok(self.start as usize..self.end as usize)
-    }
 }
 
 #[derive(Debug, Clone, PartialEq)]

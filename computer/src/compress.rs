@@ -169,7 +169,7 @@ impl ImageSpace {
     /// Maps a point on the image to the device pixel under its center. A point
     /// outside the image is an error that restates the image's size, since the
     /// model is evidently working from a different picture than this one.
-    pub fn to_device(&self, x: u16, y: u16) -> Result<(u16, u16)> {
+    pub fn to_device(self, x: u16, y: u16) -> Result<(u16, u16)> {
         let ((iw, ih), (dw, dh)) = (self.image, self.device);
         if u32::from(x) >= iw || u32::from(y) >= ih {
             return Err(Error::plain(
@@ -219,9 +219,8 @@ impl ImageSpace {
 pub struct Compressed {
     pub png: Vec<u8>,
     pub space: ImageSpace,
-    pub original_bytes: usize,
-    pub content: Content,
-    /// Palette size, or 0 for a truecolor/unchanged image.
+    /// Palette size, or 0 for a truecolor/unchanged image (read by the tests).
+    #[cfg_attr(not(test), allow(dead_code))]
     pub colors: usize,
 }
 
@@ -250,7 +249,7 @@ pub fn for_model(bytes: &[u8], policy: &Policy) -> Result<Compressed> {
     let analysis = analyze(&image);
     let (tw, th) = target_size(image.w, image.h, analysis.content, policy);
     let space = |w: u32, h: u32| ImageSpace { device: (image.w, image.h), image: (w, h) };
-    let unchanged = |colors| Compressed { png: bytes.to_vec(), space: space(image.w, image.h), original_bytes: bytes.len(), content: analysis.content, colors };
+    let unchanged = |colors| Compressed { png: bytes.to_vec(), space: space(image.w, image.h), colors };
     if (tw, th) == (image.w, image.h) && bytes.len() <= policy.budget {
         return Ok(unchanged(0));
     }
@@ -275,7 +274,7 @@ pub fn for_model(bytes: &[u8], policy: &Policy) -> Result<Compressed> {
         } else {
             (encode_rgba(w, h, pixels)?, 0)
         };
-        let candidate = Compressed { png, space: space(w, h), original_bytes: bytes.len(), content: analysis.content, colors: used };
+        let candidate = Compressed { png, space: space(w, h), colors: used };
         let fits = candidate.png.len() <= policy.budget;
         if best.as_ref().is_none_or(|b| candidate.png.len() < b.png.len()) {
             best = Some(candidate);

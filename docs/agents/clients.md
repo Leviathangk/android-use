@@ -1,24 +1,36 @@
 # Connect an agent client
 
-Android Use is a local stdio MCP server. Every client needs the same two facts:
+Android Use is a local stdio MCP server: command `au`, arguments `serve --mcp`. It starts even when no device is connected; tool results then explain what to fix.
 
-- **command:** the absolute path to `au` (`au.exe` on Windows), kept beside `aubridge.apk`
-- **arguments:** `serve --mcp`
+## One command
 
-The server starts even when no device is connected; tool results then explain what to fix. Run `au setup` once before first use (see the [human quickstart](../getting-started.md)).
+```bash
+au install            # every agent found on this computer
+au install cursor     # one agent: claude, codex, cursor, gemini, vscode, claude-desktop, opencode
+au install --dry-run  # show what would change; write nothing
+au uninstall cursor   # remove only the android-use entry
+```
 
-Replace `/ABSOLUTE/PATH/TO/au` below with your path. On Windows use `C:\\path\\to\\au.exe` inside JSON strings.
+`au setup` runs `au install` for you after the device is ready.
+
+- Only the `android-use` entry changes. Other entries, key order, and indentation are kept, and the previous file is saved as `<file>.au-backup`.
+- An `android-use` entry that `au` did not write is left alone unless you pass `--force`.
+- Claude Code and Codex are configured through their own `mcp add` command (their files are rewritten by the running app), and get the skill in `~/.claude/skills` or `~/.codex/skills`.
+- A config file with comments or trailing commas (VS Code and OpenCode allow them) is not edited; `au install` prints the snippet to paste instead.
+- Desktop apps (Cursor, VS Code, Claude Desktop) do not inherit your shell's PATH, so they get the absolute path of `au` as found on PATH. Terminal agents get plain `au`.
+
+Run `au setup` once first (see the [human quickstart](../getting-started.md)). The manual forms follow; replace `au` with an absolute path if the client cannot find it.
 
 ## Claude Code
 
 ```bash
-claude mcp add android-use --scope user -- /ABSOLUTE/PATH/TO/au serve --mcp
+claude mcp add android-use --scope user -- au serve --mcp
 ```
 
 Or commit a project-scoped `.mcp.json`:
 
 ```json
-{ "mcpServers": { "android-use": { "command": "/ABSOLUTE/PATH/TO/au", "args": ["serve", "--mcp"] } } }
+{ "mcpServers": { "android-use": { "command": "au", "args": ["serve", "--mcp"] } } }
 ```
 
 ## Codex
@@ -27,7 +39,7 @@ Add to `~/.codex/config.toml`:
 
 ```toml
 [mcp_servers.android-use]
-command = "/ABSOLUTE/PATH/TO/au"
+command = "au"
 args = ["serve", "--mcp"]
 ```
 
@@ -36,7 +48,7 @@ args = ["serve", "--mcp"]
 Cursor reads `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project); Claude Desktop reads `claude_desktop_config.json`. Both use:
 
 ```json
-{ "mcpServers": { "android-use": { "command": "/ABSOLUTE/PATH/TO/au", "args": ["serve", "--mcp"] } } }
+{ "mcpServers": { "android-use": { "command": "au", "args": ["serve", "--mcp"] } } }
 ```
 
 ## VS Code
@@ -44,7 +56,7 @@ Cursor reads `~/.cursor/mcp.json` (or `.cursor/mcp.json` in a project); Claude D
 Add to `.vscode/mcp.json`:
 
 ```json
-{ "servers": { "android-use": { "type": "stdio", "command": "/ABSOLUTE/PATH/TO/au", "args": ["serve", "--mcp"] } } }
+{ "servers": { "android-use": { "type": "stdio", "command": "au", "args": ["serve", "--mcp"] } } }
 ```
 
 ## Any other MCP client

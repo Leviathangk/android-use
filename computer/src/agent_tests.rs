@@ -1,0 +1,258 @@
+use super::*;
+use crate::api::parse_act_command;
+
+#[test]
+fn same_surface_actions_share_one_plan() {
+    let actions = parse_act_command(r#"tap "A" then tap "B" then page click "C" then crop image "screen" from 0 0 with size 1 by 1 then tap "D""#).unwrap();
+    assert_eq!([0, 2, 3, 4].map(|start| group_end(&actions, start)), [2, 3, 4, 5]);
+    assert_eq!(group_end(&actions, 1), 2);
+}
+
+#[test]
+fn step_results_read_as_one_summary() {
+    assert_eq!(completed(&["Done. Opened Settings.".into(), "Done. Tapped Wi-Fi.".into()]), "Opened Settings. Tapped Wi-Fi.");
+    assert_eq!(completed(&["Done.".into(), "Done. Cropped.".into()]), "Cropped.");
+}
+
+#[test]
+fn deadlines_cover_the_longest_wait() {
+    assert_eq!(deadline(&parse_act_command(r#"tap "A""#).unwrap()), 8000);
+    assert_eq!(deadline(&parse_act_command(r#"tap "A" then wait for text "B" up to 12 seconds"#).unwrap()), 13_000);
+    assert_eq!(deadline(&parse_act_command("record screen for 30 seconds").unwrap()), 30_000);
+}
+
+#[test]
+fn only_package_shaped_names_skip_lookup() {
+    assert!(looks_like_package("com.android.settings"));
+    assert!(!looks_like_package("Dr. Panda"));
+    assert!(!looks_like_package("Maps"));
+    assert!(!looks_like_package("com..x"));
+}
+
+/// End-to-end agent flows against a scripted helper speaking the real
+/// wire protocol: a home screen with "Settings", and a Settings screen
+/// with "Wi-Fi" and "Bluetooth".
+mod flows {
+    use super::*;
+    use crate::{bridge::Bridge, device::Device};
+    use base64::{engine::general_purpose::STANDARD, Engine as _};
+    use std::{
+        io::{Read as _, Write as _},
+        net::{TcpListener, TcpStream},
+    };
+
+    fn frame_in(s: &mut TcpStream) -> Option<Value> {
+        let mut header = [0u8; 4];
+        s.read_exact(&mut header).ok()?;
+        let mut body = vec![0; u32::from_be_bytes(header) as usize];
+        s.read_exact(&mut body).ok()?;
+        serde_json::from_slice(&body).ok()
+    }
+
+    fn frame_out(s: &mut TcpStream, value: &Value) {
+        let body = serde_json::to_vec(value).unwrap();
+        s.write_all(&(body.len() as u32).to_be_bytes()).unwrap();
+        s.write_all(&body).unwrap();
+    }
+
+    fn labels(screen: &str) -> &'static [&'static str] {
+        if screen == "settings" {
+            &["Wi-Fi", "Bluetooth", "Flaky"]
+        } else {
+            &["Settings"]
+        }
+    }
+
+    fn fake_helper(stream: &mut TcpStream, capture: &[u8]) {
+        let (mut screen, mut generation) = ("home", 1u64);
+        while let Some(q) = frame_in(stream) {
+            let seq = q[0].clone();
+            let names = labels(screen);
+            let reply = match q[1].as_str().unwrap() {
+                "status" => json!([seq, 0, generation, 7]),
+                "observe" if q[2].as_str() == Some(generation.to_string().as_str()) => json!([seq, 0, generation]),
+                "observe" => json!([seq, 0, generation, "fixture", names.iter().enumerate().map(|(i, l)| json!([i, l, 98, 3])).collect::<Vec<_>>()]),
+                "semantic" => json!([seq, 0, names.iter().map(|l| json!([l, "", "button", "", true, false])).collect::<Vec<_>>()]),
+                "resolve" => {
+                    let wanted = q[2]["label"].as_str().unwrap().to_lowercase();
+                    json!([seq, 0, names.iter().enumerate().filter(|(_, l)| l.to_lowercase() == wanted).map(|(i, _)| i).collect::<Vec<_>>()])
+                }
+                "artifact" => {
+                    let (start, end) = (q[3].as_u64().unwrap() as usize, q[4].as_u64().unwrap() as usize);
+                    json!([seq, 0, capture.len(), start, STANDARD.encode(&capture[start..end])])
+                }
+                "run" if q[2].as_u64() != Some(generation) => json!([seq, 1, generation, 0]),
+                // "Flaky" changes the screen every time it is tapped, so the plan is always stale.
+                "run" if q[6].as_array().unwrap().iter().any(|op| op[0] == "tap" && op[1] == 2) => {
+                    generation += 1;
+                    json!([seq, 1, generation, 0])
+                }
+                "run" => {
+                    let mut changes = 0;
+                    let (mut failed, mut artifact) = (None, None);
+                    for (at, op) in q[6].as_array().unwrap().iter().enumerate() {
+                        match op[0].as_str().unwrap() {
+                            "launch" => (screen, generation, changes) = ("settings", generation + 1, changes + 1),
+                            "tap" | "tap_point" => (generation, changes) = (generation + 1, changes + 1),
+                            "capture" => artifact = Some("a1"),
+                            "assert" => {
+                                let present = labels(screen).contains(&op[1][1][1].as_str().unwrap());
+                                if present != (op[1][0] == "exists") {
+                                    failed = Some(at);
+                                    break;
+                                }
+                            }
+                            _ => {
+                                failed = Some(at);
+                                break;
+                            }
+                        }
+                    }
+                    match failed {
+                        Some(at) => json!([seq, if changes > 0 { 3 } else { 9 }, generation, changes, at]),
+                        None if artifact.is_some() => json!([seq, 0, generation, changes, null, artifact]),
+                        None => json!([seq, 0, generation, changes]),
+                    }
+                }
+                _ => json!([seq, 5]),
+            };
+            frame_out(stream, &reply);
+        }
+    }
+
+    /// A 1080×2400 screenshot of striped "text" on white.
+    fn phone_screenshot() -> Vec<u8> {
+        let (w, h) = (1080u32, 2400u32);
+        let pixels: Vec<u8> = (0..w * h).flat_map(|i| if (i / w) % 24 < 8 && (i % w / 6) % 3 != 2 && i % w > 80 { [30, 30, 30, 255] } else { [255, 255, 255, 255] }).collect();
+        visual::encode(w, h, &pixels, usize::MAX).unwrap()
+    }
+
+    fn engine() -> (Engine, tempfile::TempDir) {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let capture = phone_screenshot();
+        std::thread::spawn(move || fake_helper(&mut listener.accept().unwrap().0, &capture));
+        let dir = tempfile::tempdir().unwrap();
+        let mut engine = Engine::at(crate::device::Paths::at(dir.path().to_path_buf()).unwrap()).unwrap();
+        let device = Device { endpoint: "fake".into(), hardware: "fake-serial".into() };
+        engine.attach(Bridge::over(TcpStream::connect(address).unwrap(), device.clone()), device);
+        (engine, dir)
+    }
+
+    fn act(engine: &mut Engine, command: &str) -> Result<ModelResponse> {
+        // A real client sends a fresh request id per call; the command text stands in for it.
+        engine.model_act(&parse_act_command(command).unwrap(), Some(command))
+    }
+
+    #[test]
+    fn chains_across_screens_and_reports_the_screen_it_led_to() {
+        let (mut engine, _dir) = engine();
+        let response = act(&mut engine, r#"open app "Settings" then tap "Wi-Fi""#).unwrap();
+        assert_eq!(response.text, "Done. Opened Settings. Tapped Wi-Fi.\nNow on screen:\nWi-Fi — button\nBluetooth — button\nFlaky — button");
+    }
+
+    #[test]
+    fn a_missing_label_runs_nothing_and_shows_what_is_there() {
+        let (mut engine, _dir) = engine();
+        let response = act(&mut engine, r#"tap "Wi-Fi" then tap "Settings""#).unwrap();
+        assert!(response.text.starts_with(r#"No item labeled "Wi-Fi" is on the current screen. Nothing was run."#), "{}", response.text);
+        assert!(response.text.contains("On screen now:\nSettings — button"), "{}", response.text);
+    }
+
+    #[test]
+    fn a_failed_check_after_a_change_is_partial_and_names_the_step() {
+        let (mut engine, _dir) = engine();
+        let error = act(&mut engine, r#"open app "Settings" then verify "Bluetooth" is gone"#).err().unwrap();
+        assert_eq!(error.code, Code::Partial);
+        assert!(error.message.contains(r#"step 2 of 2 (verify "Bluetooth" is gone)"#), "{}", error.message);
+    }
+
+    #[test]
+    fn a_stale_step_after_completed_ones_never_says_retry_the_command() {
+        let (mut engine, _dir) = engine();
+        let error = act(&mut engine, r#"open app "Settings" then tap "Flaky""#).err().unwrap();
+        assert_eq!(error.code, Code::Partial);
+        assert!(error.message.starts_with("Partly done: Opened Settings. Then: the screen changed"), "{}", error.message);
+        assert!(error.message.contains("do not repeat the ones that ran") && !error.message.contains("Retry the same command"), "{}", error.message);
+    }
+
+    #[test]
+    fn consecutive_crops_are_rejected_before_anything_runs() {
+        let (mut engine, _dir) = engine();
+        let error = act(&mut engine, r#"open app "Settings" then crop image "screen" from 0 0 with size 1 by 1 then crop image "screen" from 0 0 with size 1 by 1"#).err().unwrap();
+        assert!(error.message.contains("nothing was run"));
+        assert!(engine.model_read(CommandRead::Screen { full: false, matching: None, delta: false }).unwrap().text.starts_with("Settings"));
+    }
+
+    #[test]
+    fn cli_processes_share_the_last_screen_scale() {
+        let (mut engine, dir) = engine();
+        engine.agent.space = Some(ImageSpace { device: (200, 400), image: (100, 200) });
+        engine.save_image_space();
+        let mut next = Engine::at(crate::device::Paths::at(dir.path().to_path_buf()).unwrap()).unwrap();
+        next.load_image_space();
+        assert_eq!(next.agent.space, Some(ImageSpace { device: (200, 400), image: (100, 200) }));
+        assert_eq!(next.map_point(10, 20).unwrap(), (21, 41));
+        assert_eq!(next.agent.mapping, vec!["image point 10,20 is device pixel 21,41".to_owned()]);
+        assert!(next.map_point(100, 5).unwrap_err().message.contains("outside the 100×200"));
+    }
+
+    #[test]
+    fn a_captured_screen_is_compressed_and_its_coordinates_map_back_to_the_device() {
+        let (mut engine, _dir) = engine();
+        assert_eq!(act(&mut engine, "tap point 1 1").err().map(|e| e.code), Some(Code::Missing), "no image, no coordinates");
+        let shot = act(&mut engine, "capture screen").unwrap();
+        let image = shot.image.expect("the screen image is attached");
+        let sent = visual::decode(&image.bytes).unwrap();
+        assert_eq!((sent.w, sent.h), (706, 1568), "shrunk to the model's own limit");
+        assert!(image.bytes.len() < 60_000, "{} bytes", image.bytes.len());
+        assert!(shot.text.contains("706×1568 pixels, scaled down from the 1080×2400 device screen"), "{}", shot.text);
+        let outside = act(&mut engine, "tap point 900 20").err().unwrap();
+        assert_eq!(outside.code, Code::Bounds);
+        assert!(outside.message.contains("outside the 706×1568 screen image"), "{}", outside.message);
+        let tapped = act(&mut engine, "tap point 353 784").unwrap();
+        assert!(tapped.text.contains("image point 353,784 is device pixel 540,1200"), "{}", tapped.text);
+        // The tap changed the screen, so the old image no longer names where things are.
+        assert_eq!(act(&mut engine, "tap point 10 10").err().map(|e| e.code), Some(Code::Missing));
+    }
+
+    #[test]
+    fn hashing_compares_the_full_resolution_captures() {
+        let (mut engine, _dir) = engine();
+        act(&mut engine, "capture screen").unwrap();
+        assert_eq!(engine.agent.originals.get("screen").map(|o| visual::decode(o).unwrap().w), Some(1080));
+        let same = engine.model_read(CommandRead::ImageDifference("screen".into(), "screen".into())).unwrap();
+        assert!(same.text.contains("match"), "{}", same.text);
+    }
+
+    #[test]
+    fn two_media_captures_in_one_command_are_refused_before_anything_runs() {
+        let (mut engine, _dir) = engine();
+        let error = act(&mut engine, "capture screen then take rear camera photo").err().unwrap();
+        assert_eq!(error.code, Code::Bounds);
+        assert!(error.message.contains("nothing was run"), "{}", error.message);
+    }
+
+    #[test]
+    fn a_missing_label_after_a_change_is_a_failed_reply() {
+        let (mut engine, _dir) = engine();
+        let response = act(&mut engine, r#"open app "Settings" then tap "Missing""#).unwrap();
+        assert!(response.failed, "{}", response.text);
+        assert!(response.text.starts_with("Partly done: Opened Settings."), "{}", response.text);
+        let clean_miss = act(&mut engine, r#"tap "Missing""#).unwrap();
+        assert!(!clean_miss.failed, "a miss that changed nothing is not an error");
+    }
+
+    #[test]
+    fn checks_that_pass_do_not_trigger_a_screen_summary() {
+        let (mut engine, _dir) = engine();
+        assert_eq!(act(&mut engine, r#"verify "Settings" exists"#).unwrap().text, "Done. Verified Settings exists.");
+    }
+
+    #[test]
+    fn notifications_reads_report_access_state() {
+        let (mut engine, _dir) = engine();
+        assert!(engine.model_read(CommandRead::Status).unwrap().text.starts_with("Ready."));
+        assert_eq!(engine.model_read(CommandRead::Notifications).err().map(|error| error.code), Some(Code::Unsupported));
+    }
+}

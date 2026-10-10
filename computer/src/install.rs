@@ -106,9 +106,9 @@ fn ready_step() -> Value {
         "ready",
         "Android Use is ready for an agent",
         &[
-            "Configure the local MCP server with the absolute path to au.",
-            "Use the arguments serve --mcp and reload the agent.",
-            "Verify with android.read q=status, then q=observe without changing the device.",
+            "Configure the local MCP server with the absolute path to au and the arguments serve --mcp, then reload the agent.",
+            "Verify with android.read status, then android.read screen, without changing the device.",
+            "Shell-only agents can use the same commands directly: au read screen, au act 'tap \"LABEL\"'.",
         ],
         "Start the local server with au serve --mcp.",
         Some("au serve --mcp"),
@@ -283,6 +283,7 @@ pub fn uninstall() -> Result<Value> {
     adb.uninstall_helper(&device)?;
     let _ = fs::remove_file(&paths.device);
     let _ = fs::remove_file(&paths.journal);
+    let _ = fs::remove_file(paths.root.join("screen-space.json"));
     let _ = fs::remove_dir_all(&paths.artifacts);
     Ok(json!({"ok":1,"uninstalled":1,"local_state_removed":1}))
 }

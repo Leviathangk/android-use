@@ -1,7 +1,8 @@
 use crate::{
-    api::{normalized, BrowserOp, BrowserPlan, BrowserPredicate, BrowserRead, Code, Error, Plan, Range, Result, Target},
+    api::{BrowserOp, BrowserPlan, BrowserPredicate, BrowserRead, Capture, Code, Error, Op, Plan, Result, Target},
     bridge::Bridge,
     device::{Adb, Device},
+    resolve::{pick, Candidate},
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
@@ -85,25 +86,9 @@ impl Browser {
         }
     }
 
-    pub fn resolve_tab_target(&self, target: &Target) -> Result<Box<str>> {
-        let needle = normalized(&target.label);
-        let mut matches: Vec<&Tab> = self.tabs.iter().filter(|tab| normalized(&tab.title) == needle || normalized(&tab.url) == needle).collect();
-        if matches.is_empty() {
-            matches = self.tabs.iter().filter(|tab| normalized(&tab.title).starts_with(&needle)).collect();
-        }
-        if matches.is_empty() {
-            return Err(Error::new(Code::Args, "the requested Chrome tab was not found"));
-        }
-        if let Some(ordinal) = target.ordinal {
-            return matches
-                .get(ordinal.saturating_sub(1) as usize)
-                .map(|tab| tab.id.clone().into_boxed_str())
-                .ok_or_else(|| Error::new(Code::Ambiguous, "the requested Chrome tab number is unavailable"));
-        }
-        if matches.len() > 1 {
-            return Err(Error::new(Code::Ambiguous, "the requested Chrome tab is ambiguous; use its numbered title"));
-        }
-        Ok(matches[0].id.clone().into_boxed_str())
+    pub fn tab_target(&self, target: &Target) -> Result<Box<str>> {
+        let candidates: Vec<_> = self.tabs.iter().filter(|tab| tab.kind == "page").map(|tab| Candidate::new(tab.id.clone().into_boxed_str(), [&tab.title, &tab.url])).collect();
+        pick(target, &candidates, "tab list")
     }
 
     pub fn act(&mut self, plan: &BrowserPlan) -> Result<Outcome> {
@@ -170,10 +155,8 @@ impl Browser {
             match op {
                 BrowserOp::Click(r) | BrowserOp::Focus(r) | BrowserOp::Text(r, _) if self.nodes_generation == self.generation && (*r as usize) < self.nodes.len() => {}
                 BrowserOp::Click(_) | BrowserOp::Focus(_) | BrowserOp::Text(_, _) => return Err(Error::new(Code::Stale, "browser node refs require a fresh browser observation")),
-                BrowserOp::Select(id) | BrowserOp::Close(id) => {
-                    if !self.tabs.iter().any(|tab| tab.id == id.as_ref()) {
-                        return Err(Error::new(Code::Args, "Chrome tab no longer exists"));
-                    }
+                BrowserOp::Select(id) | BrowserOp::Close(id) if !self.tabs.iter().any(|tab| tab.id == id.as_ref()) => {
+                    return Err(Error::new(Code::Args, "Chrome tab no longer exists"));
                 }
                 _ => {}
             }
@@ -222,15 +205,15 @@ impl Browser {
             }
             BrowserOp::Screenshot => {
                 let target = self.selected.clone();
-                let captured = self
-                    .command("Target.activateTarget", json!({"targetId":target}))
-                    .and_then(|_| self.command("Page.bringToFront", json!({})))
-                    .and_then(|_| self.command("Page.enable", json!({})))
-                    .and_then(|_| self.command("Page.captureScreenshot", json!({"format":"jpeg","quality":60,"fromSurface":true})))
-                    .and_then(|value| {
-                        let encoded = value.get("data").and_then(Value::as_str).ok_or("protocol")?;
-                        STANDARD.decode(encoded).map_err(|_| "protocol")
-                    });
+                // Bringing the tab forward is best-effort: a tab that is already visible
+                // still captures, and a failure here must not force a whole-screen fallback.
+                let _ = self.command("Target.activateTarget", json!({"targetId":target}));
+                let _ = self.command("Page.bringToFront", json!({}));
+                let _ = self.command("Page.enable", json!({}));
+                let captured = self.command("Page.captureScreenshot", json!({"format":"jpeg","quality":60,"fromSurface":true})).and_then(|value| {
+                    let encoded = value.get("data").and_then(Value::as_str).ok_or("protocol")?;
+                    STANDARD.decode(encoded).map_err(|_| "protocol")
+                });
                 *artifact = Some(match captured {
                     Ok(bytes) if !bytes.is_empty() && bytes.len() <= MAX_SCREENSHOT => bytes,
                     Ok(_) | Err(_) => self.helper_screenshot()?,
@@ -241,36 +224,39 @@ impl Browser {
                 self.activate(id)?;
                 Ok(())
             }
+            // Close and New are mutations whose effect is confirmed by polling the
+            // tab list. Once the request is sent, a failure to confirm means the
+            // tab may have changed, so the outcome is reported as uncertain.
             BrowserOp::Close(id) => {
-                let _ = http_get(self.port, &format!("/json/close/{id}")).map_err(|_| "helper")?;
+                http_get(self.port, &format!("/json/close/{id}")).map_err(|_| "unknown")?;
                 let end = deadline.min(Instant::now() + Duration::from_secs(3));
                 while Instant::now() < end {
-                    if !self.list_tabs().map_err(|_| "helper")?.iter().any(|tab| tab.id == id.as_ref()) {
+                    if !self.list_tabs().map_err(|_| "unknown")?.iter().any(|tab| tab.id == id.as_ref()) {
                         self.cdp = None;
-                        self.sync().map_err(|_| "helper")?;
+                        self.sync().map_err(|_| "unknown")?;
                         return Ok(());
                     }
                     thread::sleep(Duration::from_millis(50));
                 }
-                Err("timeout")
+                Err("unknown")
             }
             BrowserOp::New(url) => {
                 let endpoint = self.browser_endpoint().map_err(|_| "helper")?;
                 let mut cdp = Cdp::connect(self.port, &endpoint).map_err(|_| "helper")?;
-                let value = cdp.command("Target.createTarget", json!({"url":url})).map_err(|_| "helper")?;
-                let id = value.get("targetId").and_then(Value::as_str).filter(|id| !id.is_empty() && id.len() <= 128).ok_or("protocol")?.to_owned();
+                let value = cdp.command("Target.createTarget", json!({"url":url})).map_err(|error| if error.code == Code::Helper { "helper" } else { "unknown" })?;
+                let id = value.get("targetId").and_then(Value::as_str).filter(|id| !id.is_empty() && id.len() <= 128).ok_or("unknown")?.to_owned();
                 let end = deadline.min(Instant::now() + Duration::from_secs(5));
                 while Instant::now() < end {
-                    let tabs = self.list_tabs().map_err(|_| "helper")?;
+                    let tabs = self.list_tabs().map_err(|_| "unknown")?;
                     if tabs.iter().any(|tab| tab.id == id && tab.kind == "page") {
                         self.selected = id;
                         self.cdp = None;
-                        self.sync().map_err(|_| "helper")?;
+                        self.sync().map_err(|_| "unknown")?;
                         return Ok(());
                     }
                     thread::sleep(Duration::from_millis(50));
                 }
-                Err("timeout")
+                Err("unknown")
             }
         }
     }
@@ -285,11 +271,13 @@ impl Browser {
         Ok(endpoint.to_owned())
     }
 
+    /// Fallback when Chrome cannot capture its own surface: a whole-screen
+    /// capture through the Android helper.
     fn helper_screenshot(&self) -> std::result::Result<Vec<u8>, &'static str> {
         let mut bridge = Bridge::connect(self.adb.clone(), self.device.clone()).map_err(|_| "helper")?;
         let (generation, _) = bridge.status().map_err(|_| "helper")?;
-        let id = format!("browser-shot-{}", nonce());
-        let plan = Plan::parse(json!({"id":id,"g":generation,"deadline_ms":8000,"max_mutations":0,"p":[["capture","screen"]]})).map_err(|_| "protocol")?;
+        let id = format!("browser-shot-{:x}", nonce()).into_boxed_str();
+        let plan = Plan { id, generation, deadline_ms: 8000, max_mutations: 0, ops: vec![Op::Capture(Capture::Screen)].into_boxed_slice() };
         let receipt = bridge.act(&plan).map_err(|_| "helper")?;
         if receipt.ok == 0 {
             return Err(match receipt.e.as_deref() {
@@ -301,23 +289,7 @@ impl Browser {
             });
         }
         let artifact = receipt.artifact.as_deref().ok_or("protocol")?;
-        let (size, _, _) = bridge.artifact(artifact, Some(Range { start: 0, end: 0 })).map_err(|_| "helper")?;
-        let size = usize::try_from(size).map_err(|_| "bounds")?;
-        if size == 0 || size > MAX_SCREENSHOT {
-            return Err("bounds");
-        }
-        let mut bytes = Vec::with_capacity(size);
-        let mut start = 0u64;
-        while start < size as u64 {
-            let end = (start + crate::api::MAX_INLINE as u64).min(size as u64);
-            let (_, actual, chunk) = bridge.artifact(artifact, Some(Range { start, end })).map_err(|_| "helper")?;
-            if actual != start || chunk.is_empty() {
-                return Err("protocol");
-            }
-            bytes.extend_from_slice(&chunk);
-            start = end;
-        }
-        Ok(bytes)
+        bridge.download(artifact, MAX_SCREENSHOT).map_err(|error| if error.code == Code::Bounds { "bounds" } else { "helper" })
     }
 
     fn dom_action(&mut self, index: u16, action: &str, text: Option<&str>) -> std::result::Result<(), &'static str> {
@@ -474,7 +446,8 @@ impl Browser {
         if result.is_err() {
             self.cdp = None;
         }
-        result.map_err(|_| "helper")
+        // A lost reply after the request was written means Chrome may have acted.
+        result.map_err(|error| if error.code == Code::Unknown { "unknown" } else { "helper" })
     }
 
     fn refresh_dom_fingerprint(&mut self) -> std::result::Result<(), &'static str> {
@@ -559,13 +532,18 @@ impl Cdp {
         }
         Ok(Self { stream, id: 0 })
     }
+    /// Errors before the request is written are `Helper`: nothing ran. Once it
+    /// is written, a lost or unreadable reply is `Unknown`, because Chrome may
+    /// already have acted. A reply that carries a CDP error is `Helper`: Chrome
+    /// rejected the command.
     fn command(&mut self, method: &str, params: Value) -> Result<Value> {
         self.id = self.id.checked_add(1).ok_or_else(|| Error::new(Code::Sequence, "CDP sequence exhausted"))?;
         let id = self.id;
-        write_ws(&mut self.stream, &serde_json::to_string(&json!({"id":id,"method":method,"params":params})).map_err(|_| Error::new(Code::Protocol, "CDP JSON failed"))?)?;
+        write_ws(&mut self.stream, &serde_json::to_string(&json!({"id":id,"method":method,"params":params})).map_err(|_| Error::new(Code::Protocol, "CDP JSON failed"))?)
+            .map_err(|error| Error::new(Code::Helper, error.message))?;
         loop {
-            let payload = read_ws(&mut self.stream)?;
-            let value: Value = serde_json::from_slice(&payload).map_err(|_| Error::new(Code::Protocol, "CDP reply was invalid JSON"))?;
+            let payload = read_ws(&mut self.stream).map_err(|error| Error::new(Code::Unknown, format!("lost the reply to {method}: {}", error.message)))?;
+            let value: Value = serde_json::from_slice(&payload).map_err(|_| Error::new(Code::Unknown, format!("the reply to {method} was not valid JSON")))?;
             if value.get("id").and_then(Value::as_u64) != Some(id) {
                 continue;
             }

@@ -1,5 +1,5 @@
-use crate::api::*;
-use crate::command::*;
+//! The public command grammar and legacy wire contract, tested through `au::api`.
+use au::api::*;
 use serde_json::{json, Value};
 
 #[test]
@@ -156,4 +156,34 @@ fn command_limits_and_bounds_are_deterministic() {
     assert!(parse_act_command(r#"open link "geo:0,0?q=Central%20Park""#).is_ok());
     assert_eq!(parse_act_command("take rear camera photo at 100 by 100").unwrap_err().code, Code::Bounds);
     assert_eq!(parse_read_command(&"x".repeat(MAX_COMMAND + 1)).unwrap_err().code, Code::Bounds);
+}
+
+#[test]
+fn agent_friendly_forms_parse() {
+    assert!(matches!(&parse_act_command("scroll down").unwrap()[0], Action::Android(AndroidAction::ScrollScreen(Direction::Down))));
+    assert!(matches!(&parse_act_command(r#"type "Ada" into "Name""#).unwrap()[0], Action::Android(AndroidAction::Type { .. })));
+    assert!(matches!(&parse_act_command(r#"page type "q" into "Search""#).unwrap()[0], Action::Browser(BrowserAction::Type { .. })));
+    assert_eq!(parse_act_command("page scroll 20001").unwrap_err().code, Code::Bounds);
+    assert!(parse_act_command("page scroll -20000").is_ok());
+}
+
+#[test]
+fn parse_errors_quote_the_failing_step_and_its_canonical_form() {
+    let error = parse_act_command(r#"tap "Save" then wait for "Done" 5 seconds"#).unwrap_err();
+    assert!(error.message.contains(r#"Could not parse "wait for "Done" 5 seconds""#), "{}", error.message);
+    assert!(error.message.contains("step 2 of 2"), "{}", error.message);
+    assert!(error.message.contains(r#"Use wait for text "TEXT" up to 5 seconds."#), "{}", error.message);
+    assert!(parse_act_command(r#"type "x" "Name""#).unwrap_err().message.contains(r#"Use type "TEXT" in "FIELD"."#));
+    assert!(parse_read_command("screen please").unwrap_err().message.contains("Use screen"));
+}
+
+#[test]
+fn tool_descriptions_document_every_command_family() {
+    let schemas = tool_schemas();
+    let act = schemas[1]["description"].as_str().unwrap();
+    for family in ["tap \"LABEL\"", "type \"TEXT\" in \"FIELD\"", "scroll up|down", "open app", "page click", "verify text", "tap point X Y", "then"] {
+        assert!(act.contains(family), "android.act description is missing {family}");
+    }
+    assert!(schemas[0]["description"].as_str().unwrap().contains("screen matching"));
+    assert_eq!(schemas[0]["annotations"]["readOnlyHint"], true);
 }

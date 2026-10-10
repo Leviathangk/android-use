@@ -776,7 +776,7 @@ mod tests {
     fn tabs_match_exact_then_title_prefix_never_url_substring() {
         let tab = |id: &str, title: &str, url: &str| Tab { id: id.into(), kind: "page".into(), title: title.into(), url: url.into(), websocket: None };
         let tabs = [tab("a", "Results for bread", "https://www.google.com/search?q=search+tips"), tab("b", "", "about:blank")];
-        let find = |label: &str| tab_match(&tabs, &Target { label: label.into(), ordinal: None }).map(|id| id.to_string());
+        let find = |label: &str| tab_match(&tabs, &Target { label: label.into(), ordinal: None, handle: None }).map(|id| id.to_string());
         assert_eq!(find("search").unwrap_err().code, Code::Missing);
         assert_eq!((find("untitled").unwrap(), find("about:blank").unwrap(), find("Results for\u{2026}").unwrap()), ("b".into(), "b".into(), "a".into()));
     }

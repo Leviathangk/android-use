@@ -10,7 +10,7 @@ use serde_json::Value;
 use std::{fs, path::Path};
 
 /// Instructions plus tool definitions, in tokens.
-const FIXED_MAX: usize = 400;
+const FIXED_MAX: usize = 430;
 /// All golden screens rendered, in tokens.
 const SCREENS_MAX: usize = 360;
 

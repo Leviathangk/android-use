@@ -14,6 +14,7 @@ use crate::{
     compress::{self, ImageSpace, Policy},
     engine::Engine,
     format::*,
+    marks::{self, Mark},
     resolve, visual,
 };
 use serde_json::{json, Value};
@@ -478,10 +479,13 @@ impl Engine {
     /// `want` is `"edit"` when the step needs a text field and `"scroll"` when it needs a scrollable
     /// area, so a heading or a control with the same words is not a candidate.
     fn resolve_target_as(&mut self, scene: &Scene, target: &Target, want: &str) -> Result<u16> {
-        let args = json!({"label": target.label.as_ref(), "ordinal": target.ordinal.unwrap_or(0), "want": want});
+        let args = json!({"label": target.label.as_ref(), "ordinal": target.ordinal.unwrap_or(0), "want": want, "handle": target.handle.map_or(-1, i32::from)});
         match self.bridge_read(|bridge| bridge.query("resolve", args.clone())) {
             Ok(value) => {
                 let (refs, tier, labels) = helper_resolution(&value)?;
+                if let (Some(handle), true) = (target.handle, refs.is_empty()) {
+                    return Err(Error::plain(Code::Missing, format!("e{handle} is not on the current screen; read the screen again for current handles")));
+                }
                 // A single control whose label only contains the request is acted on when it is
                 // plainly what was meant, and the result names it; otherwise it counts as missing.
                 if tier >= 2 && refs.len() == 1 && target.ordinal.is_none() {
@@ -627,11 +631,33 @@ impl Engine {
         Some(self.present_screen(bytes))
     }
 
+    /// The capture with a numbered box over each control (set-of-marks), or `None` when the helper
+    /// reports none. Best effort: the plain image is always a fine fallback.
+    fn marked(&mut self, bytes: &[u8]) -> Option<Vec<u8>> {
+        let rows = self.bridge_read(|bridge| bridge.query("marks", Value::Null)).ok()?;
+        let marks: Vec<Mark> = rows
+            .as_array()?
+            .iter()
+            .filter_map(|row| {
+                let n: Vec<u64> = row.as_array()?.iter().filter_map(Value::as_u64).collect();
+                let at = |i: usize| u32::try_from(*n.get(i)?).ok();
+                Some(Mark { handle: u16::try_from(*n.first()?).ok()?, rect: (at(1)?, at(2)?, at(3)?, at(4)?) })
+            })
+            .collect();
+        if marks.is_empty() {
+            return None;
+        }
+        let mut image = visual::decode(bytes).ok()?;
+        marks::draw(&mut image, &marks);
+        visual::encode(image.w, image.h, &image.pixels, usize::MAX).ok()
+    }
+
     /// Compresses a screen capture for the model and remembers how its
     /// coordinates map back to the device. The returned note tells the model
     /// the image's size and scale, and calls out a changed screen shape.
     fn present_screen(&mut self, bytes: Vec<u8>) -> (ModelImage, String) {
-        let Ok(compressed) = compress::for_model(&bytes, &Policy::from_env()) else {
+        let marked = self.marked(&bytes);
+        let Ok(compressed) = compress::for_model(marked.as_deref().unwrap_or(&bytes), &Policy::from_env()) else {
             // Sent unchanged, so the image is full resolution and its pixels are device pixels.
             self.agent.space = visual::decode(&bytes).ok().map(|image| ImageSpace { device: (image.w, image.h), image: (image.w, image.h) });
             self.agent.originals.insert("screen".into(), bytes.clone().into());
@@ -639,6 +665,9 @@ impl Engine {
             return (ModelImage { bytes: self.remember("screen", bytes), mime_type }, String::new());
         };
         let mut note = compressed.note();
+        if marked.is_some() {
+            note.push_str(" Boxes carry numbers: tap eN taps the control with that number.");
+        }
         if let Some(change) = compressed.space.change_note(self.agent.shape) {
             note = format!("{change} {note}");
         }

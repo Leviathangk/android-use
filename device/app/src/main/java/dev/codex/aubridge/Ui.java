@@ -164,13 +164,73 @@ public final class Ui extends AccessibilityService {
         return new JSONArray().put(seq).put(0).put(s.generation).put(s.pkg).put(rows);
     }
 
+    /** Handles shown in the last listing, by number: the node's key then (see {@link #key}). */
+    private final java.util.Map<Integer, String> listed = new java.util.HashMap<>();
+
+    /** Identity of a node across rebuilds of the scene: class, view id and bounds. */
+    private static String key(N n) {
+        return className(n)
+                + "|"
+                + n.node.getViewIdResourceName()
+                + "|"
+                + n.left
+                + ","
+                + n.top
+                + ","
+                + n.right
+                + ","
+                + n.bottom;
+    }
+
+    /** Remembers which node each listed row (by position in the full listing) was. */
+    private void remember(List<SemanticCompiler.Row> rows, java.util.Map<Long, N> bySource) {
+        java.util.Map<Integer, String> keys = new java.util.HashMap<>();
+        for (int i = 0; i < rows.size(); i++) {
+            N n = bySource.get(rows.get(i).source);
+            if (n != null) keys.put(i, key(n));
+        }
+        synchronized (guard) {
+            listed.clear();
+            listed.putAll(keys);
+        }
+    }
+
+    /**
+     * Rows of the last listing that can be tapped, as {@code [handle, left, top, right, bottom]}.
+     */
+    JSONArray marks() {
+        Scene s = snapshot();
+        java.util.Map<Long, N> bySource = new java.util.HashMap<>();
+        List<SemanticCompiler.Row> rows = compileSemantic(s, bySource);
+        remember(rows, bySource);
+        JSONArray out = new JSONArray();
+        for (int i = 0; i < rows.size() && out.length() < 64; i++) {
+            SemanticCompiler.Row row = rows.get(i);
+            if (row.kind.isEmpty()
+                    || row.kind.equals("heading")
+                    || row.kind.equals("scroll area")
+                    || row.right <= row.left) continue;
+            out.put(
+                    new JSONArray()
+                            .put(i)
+                            .put(row.left)
+                            .put(row.top)
+                            .put(row.right)
+                            .put(row.bottom));
+        }
+        return out;
+    }
+
     JSONArray semantic(String focus) throws Bridge.Limit {
         Scene s = snapshot();
-        List<SemanticCompiler.Row> rows = compileSemantic(s);
+        java.util.Map<Long, N> bySource = new java.util.HashMap<>();
+        List<SemanticCompiler.Row> rows = compileSemantic(s, bySource);
+        remember(rows, bySource);
         String needle = Targets.normalize(focus);
         JSONArray out = new JSONArray();
         int bytes = 0;
-        for (SemanticCompiler.Row row : rows) {
+        for (int index = 0; index < rows.size(); index++) {
+            SemanticCompiler.Row row = rows.get(index);
             String label = shorten(row.label, 512),
                     value = shorten(row.value, 512),
                     kind = shorten(row.kind, 64),
@@ -187,7 +247,8 @@ public final class Ui extends AccessibilityService {
                             .put(kind)
                             .put(state)
                             .put(row.enabled)
-                            .put(row.selected));
+                            .put(row.selected)
+                            .put(index));
             bytes += cost;
         }
         return out;
@@ -197,9 +258,10 @@ public final class Ui extends AccessibilityService {
      * Owners of the controls that {@code label} names, in listing order, as {@code {r: refs, t:
      * tier, l: matched labels}}. A tier of 2 or more means no control had exactly that label.
      */
-    JSONObject resolve(String label, String want) throws Bridge.Limit {
+    JSONObject resolve(String label, String want, int handle) throws Bridge.Limit {
         Scene s = snapshot();
         s.exposed = Math.min(s.frontier, s.nodes.size());
+        if (handle >= 0) return resolveHandle(s, handle);
         List<String[]> names = new ArrayList<>(s.nodes.size());
         for (N n : s.nodes) names.add(new String[] {n.semanticLabel, n.hint});
         Targets.Hits found = Targets.search(names, label);
@@ -268,6 +330,29 @@ public final class Ui extends AccessibilityService {
         }
         try {
             return new JSONObject().put("r", refs).put("t", found.tier).put("l", names2);
+        } catch (org.json.JSONException e) {
+            throw new Bridge.Limit();
+        }
+    }
+
+    /** The node a handle from the last listing named, found again by its key; none if it moved. */
+    private JSONObject resolveHandle(Scene s, int handle) throws Bridge.Limit {
+        String key;
+        synchronized (guard) {
+            key = listed.get(handle);
+        }
+        JSONArray refs = new JSONArray(), shown = new JSONArray();
+        if (key != null) {
+            for (N n : s.nodes) {
+                if (n.id < s.frontier && key.equals(key(n))) {
+                    refs.put(n.id);
+                    shown.put("e" + handle);
+                    break;
+                }
+            }
+        }
+        try {
+            return new JSONObject().put("r", refs).put("t", 0).put("l", shown);
         } catch (org.json.JSONException e) {
             throw new Bridge.Limit();
         }
@@ -394,9 +479,11 @@ public final class Ui extends AccessibilityService {
         return best;
     }
 
-    private static List<SemanticCompiler.Row> compileSemantic(Scene s) {
+    private static List<SemanticCompiler.Row> compileSemantic(
+            Scene s, java.util.Map<Long, N> bySource) {
         List<SemanticCompiler.Item> input = new ArrayList<>();
         for (N n : s.nodes) {
+            bySource.put(n.sourceId >= 0 ? n.sourceId : n.id, n);
             String c = className(n), lower = c.toLowerCase(Locale.ROOT);
             input.add(
                     new SemanticCompiler.Item(

@@ -17,7 +17,7 @@ Generated from `computer/src/spec.rs`; edit the table, then run `cargo xtask doc
 
 Join up to 16 steps with `then`. Quote names as `screen` shows them; `Name#2` is `"Name" number 2`. N is 0-30. `tap point` and `swipe` use the attached image's pixels, only after a label is missing.
 
-- tap "LABEL" [number N]
+- tap "LABEL" [number N] | tap eN
 - toggle "LABEL"
 - type "TEXT" in "FIELD"
 - scroll up|down|left|right [in "AREA"] [until "TEXT"]

@@ -540,7 +540,9 @@ pub(crate) fn failure_text(receipt: &Receipt, actions: &[Action]) -> String {
     let step = receipt.at.map(usize::from).filter(|index| *index < actions.len()).map(|index| (index, &actions[index]));
     let what = step.map_or_else(|| "run the command".to_owned(), |(_, action)| describe_action(action));
     let which = step.map_or_else(|| "a later step".to_owned(), |(index, action)| format!("step {} of {} ({})", index + 1, actions.len(), describe_action(action)));
-    let text = if receipt.m > 0 || receipt.e.as_deref() == Some("partial") {
+    let text = if receipt.m > 0 && receipt.e.as_deref() == Some("unknown") {
+        format!("Partly done, and uncertain: at least {} change(s) were made, and {which} may or may not have finished. Read the screen before doing anything else, and do not repeat the whole command.", receipt.m)
+    } else if receipt.m > 0 || receipt.e.as_deref() == Some("partial") {
         format!("Partly done: {} change(s) were made before {which} failed. Read the screen before doing anything else, and do not repeat the whole command.", receipt.m)
     } else {
         match receipt.e.as_deref() {
@@ -701,6 +703,7 @@ mod tests {
         let failed = |m: u8, at: u8, e: &str| Receipt { id: "x".into(), ok: 0, g: 1, m, at: Some(at), e: Some(e.into()), partial: None, next: None, artifact: None };
         assert!(failure_text(&failed(1, 1, "partial"), &actions).contains("step 2 of 2 (verify text \"Saved\" exists)"));
         assert_eq!(receipt_code(&failed(1, 1, "partial")), Code::Partial);
+        assert!(failure_text(&failed(1, 1, "unknown"), &actions).contains("step 2 of 2 (verify text \"Saved\" exists) may or may not have finished"));
         let verify = [Action::Android(AndroidAction::VerifyText("Saved".into()))];
         assert!(failure_text(&failed(0, 0, "helper"), &verify).starts_with("Check failed"));
         let wait = [Action::Android(AndroidAction::WaitText { text: "Done".into(), seconds: 5 })];

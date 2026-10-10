@@ -1,0 +1,7 @@
+AU agentic benchmark fixture
+list Benchmark scroll surface
+edit Fixture text=""
+btn SUBMIT FORM
+sw Benchmark toggle=off
+btn OPEN BENCHMARK DIALOG
+Ready

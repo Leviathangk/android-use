@@ -1,0 +1,7 @@
+AU agentic benchmark fixture
+Benchmark scroll surface — scroll area
+Fixture text — Fixture text text field
+SUBMIT FORM — button
+Benchmark toggle — off switch
+OPEN BENCHMARK DIALOG — button
+Ready — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…

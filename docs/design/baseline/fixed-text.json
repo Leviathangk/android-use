@@ -1,0 +1,55 @@
+{
+ "instructions": "Android Use controls one real Android device. android.read looks without changing anything; android.act changes the device. Start with android.read screen (or page for the Chrome tab) when the state is unknown. Act on a label you saw, in straight double quotes: tap \"Wi-Fi\", type \"hello\" in \"Message\". Each successful action reports what is on screen now, so a separate read is rarely needed. Join a few steps with then. stale means nothing ran: retry. partial or unknown means read the screen before changing anything again; never repeat blindly. Ask the user before purchases, sending messages, account or security changes, deleting data, or using the camera, microphone, location, or screen recording.",
+ "tools": [
+  {
+   "annotations": {
+    "openWorldHint": true,
+    "readOnlyHint": true,
+    "title": "Read the Android device"
+   },
+   "description": "Look at the connected Android device without changing it. Send one command:\nstatus | screen | screen full | screen changes | screen matching \"TEXT\" | find \"TEXT\"\npage | page text | page text matching \"TEXT\" | browser tabs (Chrome)\nnotifications | location | capabilities | image hash \"NAME\" | image difference \"A\" and \"B\"\nscreen lists visible controls as `Label — state kind`; a duplicated label shows the (number N) to use. If a screen has little readable text, its image is attached. Read only when you do not already know the state: android.act reports the screen after each change.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "command": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "type": "string"
+     }
+    },
+    "required": [
+     "command"
+    ],
+    "type": "object"
+   },
+   "name": "android.read",
+   "title": "Read the Android device"
+  },
+  {
+   "annotations": {
+    "destructiveHint": true,
+    "idempotentHint": false,
+    "openWorldHint": true,
+    "readOnlyHint": false,
+    "title": "Act on the Android device"
+   },
+   "description": "Change the connected Android device with one plain command. Quote the exact visible label in straight double quotes; add number N after a duplicated label. Join up to 16 changes with then.\nAndroid: tap \"LABEL\" | toggle \"LABEL\" | hold \"LABEL\" | type \"TEXT\" in \"FIELD\" | scroll up|down|left|right [in \"AREA\"] | press back|home|recents|notifications|enter | open app \"NAME\" | open setting \"wifi|bluetooth|display|sound|notifications|apps|battery|accessibility|date and time|developer options\" | open link \"https://…\"\nChecks: wait for \"LABEL\" up to N seconds | wait for text \"TEXT\" up to N seconds | wait for screen change up to N seconds | verify \"LABEL\" exists | verify \"LABEL\" is gone | verify text \"TEXT\" exists (N ≤ 30)\nChrome: page open \"URL\" | page click \"LABEL\" | page type \"TEXT\" in \"FIELD\" | page press \"Enter|Tab|Escape|Backspace|ArrowUp|ArrowDown\" | page scroll PIXELS | page wait for text \"TEXT\" up to N seconds | page back | page reload | page screenshot | new tab \"URL\" | select tab \"TITLE\" | close tab \"TITLE\"\nMedia and notifications (ask the user first): capture screen | take rear|front camera photo | record microphone|screen for N seconds | open notification \"TITLE\" | dismiss notification \"TITLE\" | run notification action \"TITLE\"\nFallback after an attached screen image only: tap point X Y | swipe from X1 Y1 to X2 Y2 over MS milliseconds (image pixel coordinates).\nResults say what ran and what is on screen now. stale = nothing ran, retry; partial or unknown = read before changing anything again.",
+   "inputSchema": {
+    "additionalProperties": false,
+    "properties": {
+     "command": {
+      "maxLength": 8192,
+      "minLength": 1,
+      "type": "string"
+     }
+    },
+    "required": [
+     "command"
+    ],
+    "type": "object"
+   },
+   "name": "android.act",
+   "title": "Act on the Android device"
+  }
+ ]
+}

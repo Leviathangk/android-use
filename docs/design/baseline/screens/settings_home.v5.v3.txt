@@ -1,0 +1,10 @@
+e1 Search Settings
+e2 Google
+e3 Network & internet
+e4 Connected devices
+e5 Apps
+e6 Notifications
+e7 Sound & vibration
+e8 Modes
+e9 Display & touch
+e10 Wallpaper & style

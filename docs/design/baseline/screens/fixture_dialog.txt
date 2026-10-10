@@ -1,0 +1,4 @@
+Benchmark confirmation
+Deterministic fixture dialog
+CANCEL — button
+CONFIRM — button

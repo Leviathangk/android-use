@@ -1,0 +1,10 @@
+e1 Network & internet
+e2 btn Navigate up
+e3 Internet: AndroidWifi
+e4 SIMs: T-Mobile
+e5 Hotspot & tethering: Off
+e6 Data Saver: Off
+e7 VPN: None
+e8 Private DNS: Automatic
+e9 Adaptive connectivity: On
+e10 Mobile network security

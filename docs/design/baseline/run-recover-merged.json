@@ -1,0 +1,2190 @@
+{
+ "fixed_per_turn": 834,
+ "results": [
+  {
+   "task": "toggle_wifi",
+   "run": 0,
+   "ok": false,
+   "calls": 9,
+   "wall_ms": 8533,
+   "result_tokens": 1001,
+   "fixed_tokens": 7506,
+   "input_tokens": 8507,
+   "output_tokens": 168,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 1948,
+     "text": "Done. Opened Settings.\nNow on screen:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Network & internet\"",
+     "ms": 750,
+     "text": "Done. Tapped Network & internet.\nNow on screen:\nNetwork & internet\nNavigate up — button\nInternet — AndroidWifi\nSIMs — T-Mobile\nHotspot & tethering — Off\nData Saver — Off\nVPN — None\nPrivate DNS — Automatic\nAdaptive connectivity — On\nMobile network security — Network type, encryption, notification controls",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 70,
+     "output_tokens": 21
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Internet\"",
+     "ms": 1751,
+     "text": "Done. Tapped Internet.\nNow on screen:\nInternet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 86,
+     "output_tokens": 19
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 19,
+     "text": "Internet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 76,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Wi-Fi\"",
+     "ms": 350,
+     "text": "No item labeled \"Wi-Fi\" is on the current screen. Nothing was run.\nOn screen now:\nInternet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 15 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 173,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_wifi",
+   "run": 1,
+   "ok": false,
+   "calls": 11,
+   "wall_ms": 8650,
+   "result_tokens": 1183,
+   "fixed_tokens": 9174,
+   "input_tokens": 10357,
+   "output_tokens": 205,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 526,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Network & internet\"",
+     "ms": 1070,
+     "text": "Done. Tapped Network & internet.\nNow on screen:\nNetwork & internet\nNavigate up — button\nInternet — AndroidWifi\nSIMs — T-Mobile\nHotspot & tethering — Off\nData Saver — Off\nVPN — None\nPrivate DNS — Automatic\nAdaptive connectivity — On\nMobile network security — Network type, encryption, notification controls",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 70,
+     "output_tokens": 21
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Internet\"",
+     "ms": 1637,
+     "text": "Done. Tapped Internet.\nNow on screen:\nInternet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 86,
+     "output_tokens": 19
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 10,
+     "text": "Internet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 76,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Wi-Fi\"",
+     "ms": 344,
+     "text": "No item labeled \"Wi-Fi\" is on the current screen. Nothing was run.\nOn screen now:\nInternet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 15 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 173,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_wifi",
+   "run": 2,
+   "ok": false,
+   "calls": 11,
+   "wall_ms": 7670,
+   "result_tokens": 900,
+   "fixed_tokens": 9174,
+   "input_tokens": 10074,
+   "output_tokens": 205,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 469,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Network & internet\"",
+     "ms": 1084,
+     "text": "Done. Tapped Network & internet.\nNow on screen:\nNetwork & internet\nNavigate up — button\nInternet — AndroidWifi\nSIMs — T-Mobile\nHotspot & tethering — Off\nData Saver — Off\nVPN — None\nPrivate DNS — Automatic\nAdaptive connectivity — On\nMobile network security — Network type, encryption, notification controls",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 70,
+     "output_tokens": 21
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Internet\"",
+     "ms": 1231,
+     "text": "Done. Tapped Internet.\nNow on screen:\nInternet\nNavigate up — button\nFix connectivity — button\nLoading…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 24,
+     "output_tokens": 19
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 18,
+     "text": "Internet\nNavigate up — button\nFix connectivity — button\nLoading…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Wi-Fi\"",
+     "ms": 67,
+     "text": "No item labeled \"Wi-Fi\" is on the current screen. Nothing was run.\nOn screen now:\nInternet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 97,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_wifi",
+   "run": 3,
+   "ok": false,
+   "calls": 11,
+   "wall_ms": 8111,
+   "result_tokens": 1183,
+   "fixed_tokens": 9174,
+   "input_tokens": 10357,
+   "output_tokens": 205,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 445,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Network & internet\"",
+     "ms": 865,
+     "text": "Done. Tapped Network & internet.\nNow on screen:\nNetwork & internet\nNavigate up — button\nInternet — AndroidWifi\nSIMs — T-Mobile\nHotspot & tethering — Off\nData Saver — Off\nVPN — None\nPrivate DNS — Automatic\nAdaptive connectivity — On\nMobile network security — Network type, encryption, notification controls",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 70,
+     "output_tokens": 21
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Internet\"",
+     "ms": 1654,
+     "text": "Done. Tapped Internet.\nNow on screen:\nInternet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 86,
+     "output_tokens": 19
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 19,
+     "text": "Internet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 76,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Wi-Fi\"",
+     "ms": 267,
+     "text": "No item labeled \"Wi-Fi\" is on the current screen. Nothing was run.\nOn screen now:\nInternet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 15 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 173,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_wifi",
+   "run": 4,
+   "ok": false,
+   "calls": 11,
+   "wall_ms": 8379,
+   "result_tokens": 1051,
+   "fixed_tokens": 9174,
+   "input_tokens": 10225,
+   "output_tokens": 204,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 1152,
+     "text": "Done. Opened Settings.\nNow on screen:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Network & internet\"",
+     "ms": 1053,
+     "text": "Done. Tapped Network & internet.\nNow on screen:\nNetwork & internet\nNavigate up — button\nInternet — AndroidWifi\nSIMs — T-Mobile\nHotspot & tethering — Off\nData Saver — Off\nVPN — None\nPrivate DNS — Automatic\nAdaptive connectivity — On\nMobile network security — Network type, encryption, notification controls",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 70,
+     "output_tokens": 21
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Internet\"",
+     "ms": 1634,
+     "text": "Done. Tapped Internet.\nNow on screen:\nInternet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 86,
+     "output_tokens": 19
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 5,
+     "text": "Internet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 76,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Wi-Fi\"",
+     "ms": 364,
+     "text": "No item labeled \"Wi-Fi\" is on the current screen. Nothing was run.\nOn screen now:\nInternet\nNavigate up — button\nFix connectivity — button\nT-Mobile — 5G\nSettings\nAndroidWifi — Connected, Wifi signal full., Open network\nSearching for networks…\nAdd network\nNetwork preferences — Wi‑Fi doesn't turn back on automatically\nSaved networks — 1 network\nNon-carrier data usage — 237 MB used Sep 11 – Oct 9\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 15 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 173,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "find_setting_scroll",
+   "run": 0,
+   "ok": false,
+   "calls": 8,
+   "wall_ms": 3547,
+   "result_tokens": 276,
+   "fixed_tokens": 6672,
+   "input_tokens": 6948,
+   "output_tokens": 139,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 503,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 188,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 3,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 19,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 21,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 2,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 3,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 3,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    }
+   ]
+  },
+  {
+   "task": "find_setting_scroll",
+   "run": 1,
+   "ok": false,
+   "calls": 5,
+   "wall_ms": 6742,
+   "result_tokens": 428,
+   "fixed_tokens": 4170,
+   "input_tokens": 4598,
+   "output_tokens": 95,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 1242,
+     "text": "Done. Opened Settings.\nNow on screen:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 875,
+     "text": "Done. Scrolled down.\nNow on screen:\nSearch Settings\nStorage — 41% used - 4.75 GB free\nBattery — 100%\nSystem — Languages, gestures, time, backup\nAbout emulated device — sdk_gphone64_arm64\nSecurity & privacy — App security, device lock, permissions\nLocation — On / 5 apps have access to location\nPasswords, passkeys & accounts — Suggestions for sign-in & autofill\nDigital Wellbeing & parental controls — Screen time, app timers, bedtime schedules\nSafety & emergency — Emergency SOS, medical info, alerts\nAccessibility",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 122,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"About emulated device\"",
+     "ms": 814,
+     "text": "Done. Tapped About emulated device.\nNow on screen:\nAbout emulated device\nNavigate up — button\nBasic info\nDevice name — sdk_gphone64_arm64\nPhone number — +1 555-123-4567\nLegal & regulatory\nLegal information\nDevice details\nSIM status — T-Mobile\nModel — sdk_gphone64_arm64\n867400022047199 — IMEI",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 82,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "find_setting_scroll",
+   "run": 2,
+   "ok": false,
+   "calls": 8,
+   "wall_ms": 3994,
+   "result_tokens": 240,
+   "fixed_tokens": 6672,
+   "input_tokens": 6912,
+   "output_tokens": 139,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 496,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 47,
+     "text": "Could not scroll down on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 20,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 27,
+     "text": "Could not scroll down on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 20,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 35,
+     "text": "Could not scroll down on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 20,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 32,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 45,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 3,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 14,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    }
+   ]
+  },
+  {
+   "task": "find_setting_scroll",
+   "run": 3,
+   "ok": false,
+   "calls": 8,
+   "wall_ms": 3398,
+   "result_tokens": 252,
+   "fixed_tokens": 6672,
+   "input_tokens": 6924,
+   "output_tokens": 139,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 456,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 138,
+     "text": "Could not scroll down on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 20,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 70,
+     "text": "Could not scroll down on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 20,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 13,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 3,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 3,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 4,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 14,
+     "text": "No scrollable area is on the current screen. Use swipe from X1 Y1 to X2 Y2 over 300 milliseconds on a screen image instead.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 32,
+     "output_tokens": 17
+    }
+   ]
+  },
+  {
+   "task": "find_setting_scroll",
+   "run": 4,
+   "ok": true,
+   "calls": 3,
+   "wall_ms": 6203,
+   "result_tokens": 306,
+   "fixed_tokens": 2502,
+   "input_tokens": 2808,
+   "output_tokens": 59,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 1769,
+     "text": "Done. Opened Settings.\nNow on screen:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down",
+     "ms": 800,
+     "text": "Done. Scrolled down.\nNow on screen:\nSearch Settings\nStorage — 41% used - 4.75 GB free\nBattery — 100%\nSystem — Languages, gestures, time, backup\nAbout emulated device — sdk_gphone64_arm64\nSecurity & privacy — App security, device lock, permissions\nLocation — On / 5 apps have access to location\nPasswords, passkeys & accounts — Suggestions for sign-in & autofill\nDigital Wellbeing & parental controls — Screen time, app timers, bedtime schedules\nSafety & emergency — Emergency SOS, medical info, alerts\nAccessibility",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 122,
+     "output_tokens": 17
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"About emulated device\"",
+     "ms": 867,
+     "text": "Done. Tapped About emulated device.\nNow on screen:\nAbout emulated device\nNavigate up — button\nBasic info\nDevice name — sdk_gphone64_arm64\nPhone number — +1 555-123-4567\nLegal & regulatory\nLegal information\nDevice details\nSIM status — T-Mobile\nModel — sdk_gphone64_arm64\nIMEI — 867400022047199\nAndroid version",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 86,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "fill_submit_form",
+   "run": 0,
+   "ok": false,
+   "calls": 6,
+   "wall_ms": 3914,
+   "result_tokens": 303,
+   "fixed_tokens": 5004,
+   "input_tokens": 5307,
+   "output_tokens": 147,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 713,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"hello\" in \"Fixture text\" then tap \"SUBMIT FORM\"",
+     "ms": 9,
+     "text": "No item labeled \"Fixture text\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 43,
+     "output_tokens": 31
+    }
+   ]
+  },
+  {
+   "task": "fill_submit_form",
+   "run": 1,
+   "ok": true,
+   "calls": 4,
+   "wall_ms": 5131,
+   "result_tokens": 383,
+   "fixed_tokens": 3336,
+   "input_tokens": 3719,
+   "output_tokens": 100,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 445,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"hello\" in \"Fixture text\" then tap \"SUBMIT FORM\"",
+     "ms": 561,
+     "text": "Done. Typed hello in Fixture text and tapped SUBMIT FORM.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — hello text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nSubmitted: hello — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 104,
+     "output_tokens": 31
+    }
+   ]
+  },
+  {
+   "task": "fill_submit_form",
+   "run": 2,
+   "ok": true,
+   "calls": 4,
+   "wall_ms": 5478,
+   "result_tokens": 362,
+   "fixed_tokens": 3336,
+   "input_tokens": 3698,
+   "output_tokens": 100,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 577,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"hello\" in \"Fixture text\" then tap \"SUBMIT FORM\"",
+     "ms": 597,
+     "text": "Done. Typed hello in Fixture text and tapped SUBMIT FORM.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — hello text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nSubmitted: hello — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 104,
+     "output_tokens": 31
+    }
+   ]
+  },
+  {
+   "task": "fill_submit_form",
+   "run": 3,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 5405,
+   "result_tokens": 202,
+   "fixed_tokens": 1668,
+   "input_tokens": 1870,
+   "output_tokens": 53,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1809,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"hello\" in \"Fixture text\" then tap \"SUBMIT FORM\"",
+     "ms": 431,
+     "text": "Done. Typed hello in Fixture text and tapped SUBMIT FORM.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — hello text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nSubmitted: hello — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 104,
+     "output_tokens": 31
+    }
+   ]
+  },
+  {
+   "task": "fill_submit_form",
+   "run": 4,
+   "ok": false,
+   "calls": 6,
+   "wall_ms": 4593,
+   "result_tokens": 398,
+   "fixed_tokens": 5004,
+   "input_tokens": 5402,
+   "output_tokens": 147,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 497,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"hello\" in \"Fixture text\" then tap \"SUBMIT FORM\"",
+     "ms": 324,
+     "text": "No item labeled \"Fixture text\" is on the current screen. Nothing was run.\nOn screen now:\nThe screen has no readable controls. Read screen again after the view changes, or capture screen to see it.\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 432×960 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 2.50 device pixels), 1 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 118,
+     "output_tokens": 31
+    }
+   ]
+  },
+  {
+   "task": "dismiss_dialog",
+   "run": 0,
+   "ok": true,
+   "calls": 5,
+   "wall_ms": 6688,
+   "result_tokens": 355,
+   "fixed_tokens": 4170,
+   "input_tokens": 4525,
+   "output_tokens": 104,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1065,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 667,
+     "text": "Done. Tapped OPEN BENCHMARK DIALOG.\nNow on screen:\nBenchmark confirmation\nDeterministic fixture dialog\nCANCEL — button\nCONFIRM — button",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 33,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CANCEL\"",
+     "ms": 540,
+     "text": "Done. Tapped CANCEL.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 96,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "dismiss_dialog",
+   "run": 1,
+   "ok": true,
+   "calls": 5,
+   "wall_ms": 6434,
+   "result_tokens": 344,
+   "fixed_tokens": 4170,
+   "input_tokens": 4514,
+   "output_tokens": 106,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 505,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 1722,
+     "text": "Done. Tapped OPEN BENCHMARK DIALOG.\nNow on screen:\nBenchmark confirmation\nDeterministic fixture dialog\nCANCEL — button\nCONFIRM — button",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 33,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CANCEL\"",
+     "ms": 584,
+     "text": "Done. Tapped CANCEL.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 96,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "dismiss_dialog",
+   "run": 2,
+   "ok": true,
+   "calls": 5,
+   "wall_ms": 5528,
+   "result_tokens": 391,
+   "fixed_tokens": 4170,
+   "input_tokens": 4561,
+   "output_tokens": 106,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 521,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 785,
+     "text": "Done. Tapped OPEN BENCHMARK DIALOG.\nNow on screen:\nBenchmark confirmation\nDeterministic fixture dialog\nCANCEL — button\nCONFIRM — button",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 33,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CANCEL\"",
+     "ms": 549,
+     "text": "Done. Tapped CANCEL.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 96,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "dismiss_dialog",
+   "run": 3,
+   "ok": true,
+   "calls": 3,
+   "wall_ms": 6288,
+   "result_tokens": 227,
+   "fixed_tokens": 2502,
+   "input_tokens": 2729,
+   "output_tokens": 66,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1701,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 694,
+     "text": "Done. Tapped OPEN BENCHMARK DIALOG.\nNow on screen:\nBenchmark confirmation\nDeterministic fixture dialog\nCANCEL — button\nCONFIRM — button",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 33,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CANCEL\"",
+     "ms": 579,
+     "text": "Done. Tapped CANCEL.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 96,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "dismiss_dialog",
+   "run": 4,
+   "ok": true,
+   "calls": 7,
+   "wall_ms": 6763,
+   "result_tokens": 556,
+   "fixed_tokens": 5838,
+   "input_tokens": 6394,
+   "output_tokens": 146,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 534,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 995,
+     "text": "Done. Tapped OPEN BENCHMARK DIALOG.\nNow on screen:\nBenchmark confirmation\nDeterministic fixture dialog\nCANCEL — button\nCONFIRM — button",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 33,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CANCEL\"",
+     "ms": 592,
+     "text": "Done. Tapped CANCEL.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 96,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "confirm_dialog",
+   "run": 0,
+   "ok": true,
+   "calls": 5,
+   "wall_ms": 8587,
+   "result_tokens": 346,
+   "fixed_tokens": 4170,
+   "input_tokens": 4516,
+   "output_tokens": 106,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 511,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 1635,
+     "text": "Done. Tapped OPEN BENCHMARK DIALOG.\nNow on screen:\nBenchmark confirmation\nDeterministic fixture dialog\nCANCEL — button\nCONFIRM — button",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 33,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CONFIRM\"",
+     "ms": 594,
+     "text": "Done. Tapped CONFIRM.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nDialog confirmed — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "confirm_dialog",
+   "run": 1,
+   "ok": true,
+   "calls": 5,
+   "wall_ms": 6985,
+   "result_tokens": 418,
+   "fixed_tokens": 4170,
+   "input_tokens": 4588,
+   "output_tokens": 106,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 509,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 982,
+     "text": "Done. Tapped OPEN BENCHMARK DIALOG.\nNow on screen:\nBenchmark confirmation\nDeterministic fixture dialog\nCANCEL — button\nCONFIRM — button",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 33,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CONFIRM\"",
+     "ms": 879,
+     "text": "Done. Tapped CONFIRM.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nDialog confirmed — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "confirm_dialog",
+   "run": 2,
+   "ok": true,
+   "calls": 3,
+   "wall_ms": 6654,
+   "result_tokens": 229,
+   "fixed_tokens": 2502,
+   "input_tokens": 2731,
+   "output_tokens": 66,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1937,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 645,
+     "text": "Done. Tapped OPEN BENCHMARK DIALOG.\nNow on screen:\nBenchmark confirmation\nDeterministic fixture dialog\nCANCEL — button\nCONFIRM — button",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 33,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CONFIRM\"",
+     "ms": 542,
+     "text": "Done. Tapped CONFIRM.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nDialog confirmed — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "confirm_dialog",
+   "run": 3,
+   "ok": true,
+   "calls": 5,
+   "wall_ms": 6310,
+   "result_tokens": 422,
+   "fixed_tokens": 4170,
+   "input_tokens": 4592,
+   "output_tokens": 106,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 407,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 1637,
+     "text": "Done. Tapped OPEN BENCHMARK DIALOG.\nNow on screen:\nBenchmark confirmation\nDeterministic fixture dialog\nCANCEL — button\nCONFIRM — button",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 33,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CONFIRM\"",
+     "ms": 461,
+     "text": "Done. Tapped CONFIRM.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nDialog confirmed — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "confirm_dialog",
+   "run": 4,
+   "ok": true,
+   "calls": 5,
+   "wall_ms": 6528,
+   "result_tokens": 414,
+   "fixed_tokens": 4170,
+   "input_tokens": 4584,
+   "output_tokens": 106,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 460,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"OPEN BENCHMARK DIALOG\"",
+     "ms": 956,
+     "text": "Done. Tapped OPEN BENCHMARK DIALOG.\nNow on screen:\nBenchmark confirmation\nDeterministic fixture dialog\nCANCEL — button\nCONFIRM — button",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 33,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"CONFIRM\"",
+     "ms": 717,
+     "text": "Done. Tapped CONFIRM.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nDialog confirmed — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_switch",
+   "run": 0,
+   "ok": true,
+   "calls": 4,
+   "wall_ms": 5461,
+   "result_tokens": 341,
+   "fixed_tokens": 3336,
+   "input_tokens": 3677,
+   "output_tokens": 78,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 443,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Benchmark toggle\"",
+     "ms": 765,
+     "text": "Done. Tapped Benchmark toggle.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — on switch\nOPEN BENCHMARK DIALOG — button\nToggle=true — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_switch",
+   "run": 1,
+   "ok": true,
+   "calls": 4,
+   "wall_ms": 5673,
+   "result_tokens": 356,
+   "fixed_tokens": 3336,
+   "input_tokens": 3692,
+   "output_tokens": 78,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 433,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Benchmark toggle\"",
+     "ms": 686,
+     "text": "Done. Tapped Benchmark toggle.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — on switch\nOPEN BENCHMARK DIALOG — button\nToggle=true — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_switch",
+   "run": 2,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 5374,
+   "result_tokens": 196,
+   "fixed_tokens": 1668,
+   "input_tokens": 1864,
+   "output_tokens": 42,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1676,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Benchmark toggle\"",
+     "ms": 582,
+     "text": "Done. Tapped Benchmark toggle.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — on switch\nOPEN BENCHMARK DIALOG — button\nToggle=true — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_switch",
+   "run": 3,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 5139,
+   "result_tokens": 196,
+   "fixed_tokens": 1668,
+   "input_tokens": 1864,
+   "output_tokens": 42,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1583,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Benchmark toggle\"",
+     "ms": 616,
+     "text": "Done. Tapped Benchmark toggle.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — on switch\nOPEN BENCHMARK DIALOG — button\nToggle=true — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "toggle_switch",
+   "run": 4,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 5294,
+   "result_tokens": 196,
+   "fixed_tokens": 1668,
+   "input_tokens": 1864,
+   "output_tokens": 42,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1652,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Benchmark toggle\"",
+     "ms": 598,
+     "text": "Done. Tapped Benchmark toggle.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — on switch\nOPEN BENCHMARK DIALOG — button\nToggle=true — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    }
+   ]
+  },
+  {
+   "task": "scroll_to_row_40",
+   "run": 0,
+   "ok": false,
+   "calls": 6,
+   "wall_ms": 7137,
+   "result_tokens": 385,
+   "fixed_tokens": 5004,
+   "input_tokens": 5389,
+   "output_tokens": 128,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 916,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1072,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 17\nBenchmark scroll surface — scroll area\nFixture row 18 — Fixture row 19, Fixture row 20, Fixture row 21, Fixture row 22, Fixture row 23, Fixture row 24, Fixture row 25, Fixture row 26,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1023,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 38\nBenchmark scroll surface — scroll area\nFixture row 39 — Fixture row 40, Fixture row 41, Fixture row 42, Fixture row 43, Fixture row 44, Fixture row 45, Fixture row 46, Fixture row 47,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Fixture row 40\"",
+     "ms": 31,
+     "text": "Could not tap \"Fixture row 40\" on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 25,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "scroll_to_row_40",
+   "run": 1,
+   "ok": false,
+   "calls": 4,
+   "wall_ms": 7024,
+   "result_tokens": 257,
+   "fixed_tokens": 3336,
+   "input_tokens": 3593,
+   "output_tokens": 90,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1737,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1062,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 17\nBenchmark scroll surface — scroll area\nFixture row 18 — Fixture row 19, Fixture row 20, Fixture row 21, Fixture row 22, Fixture row 23, Fixture row 24, Fixture row 25, Fixture row 26,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1072,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 38\nBenchmark scroll surface — scroll area\nFixture row 39 — Fixture row 40, Fixture row 41, Fixture row 42, Fixture row 43, Fixture row 44, Fixture row 45, Fixture row 46, Fixture row 47,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Fixture row 40\"",
+     "ms": 18,
+     "text": "Could not tap \"Fixture row 40\" on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 25,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "scroll_to_row_40",
+   "run": 2,
+   "ok": false,
+   "calls": 8,
+   "wall_ms": 7020,
+   "result_tokens": 513,
+   "fixed_tokens": 6672,
+   "input_tokens": 7185,
+   "output_tokens": 168,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 514,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 54,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1410,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 17\nBenchmark scroll surface — scroll area\nFixture row 18 — Fixture row 19, Fixture row 20, Fixture row 21, Fixture row 22, Fixture row 23, Fixture row 24, Fixture row 25, Fixture row 26,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1073,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 38\nBenchmark scroll surface — scroll area\nFixture row 39 — Fixture row 40, Fixture row 41, Fixture row 42, Fixture row 43, Fixture row 44, Fixture row 45, Fixture row 46, Fixture row 47,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Fixture row 40\"",
+     "ms": 18,
+     "text": "Could not tap \"Fixture row 40\" on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 25,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "scroll_to_row_40",
+   "run": 3,
+   "ok": false,
+   "calls": 4,
+   "wall_ms": 6971,
+   "result_tokens": 257,
+   "fixed_tokens": 3336,
+   "input_tokens": 3593,
+   "output_tokens": 90,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1867,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1051,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 17\nBenchmark scroll surface — scroll area\nFixture row 18 — Fixture row 19, Fixture row 20, Fixture row 21, Fixture row 22, Fixture row 23, Fixture row 24, Fixture row 25, Fixture row 26,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1065,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 38\nBenchmark scroll surface — scroll area\nFixture row 39 — Fixture row 40, Fixture row 41, Fixture row 42, Fixture row 43, Fixture row 44, Fixture row 45, Fixture row 46, Fixture row 47,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Fixture row 40\"",
+     "ms": 17,
+     "text": "Could not tap \"Fixture row 40\" on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 25,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "scroll_to_row_40",
+   "run": 4,
+   "ok": false,
+   "calls": 4,
+   "wall_ms": 6688,
+   "result_tokens": 257,
+   "fixed_tokens": 3336,
+   "input_tokens": 3593,
+   "output_tokens": 90,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"AU Benchmark Fixture\"",
+     "ms": 1622,
+     "text": "Done. Opened AU Benchmark Fixture.\nNow on screen:\nAU agentic benchmark fixture\nBenchmark scroll surface — scroll area\nFixture text — Fixture text text field\nSUBMIT FORM — button\nBenchmark toggle — off switch\nOPEN BENCHMARK DIALOG — button\nReady — Fixture row 1, Fixture row 2, Fixture row 3, Fixture row 4, Fixture row 5, Fixture row 6, Fixture row 7, Fixture row 8, Fixture…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 22
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1040,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 17\nBenchmark scroll surface — scroll area\nFixture row 18 — Fixture row 19, Fixture row 20, Fixture row 21, Fixture row 22, Fixture row 23, Fixture row 24, Fixture row 25, Fixture row 26,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "scroll down in \"Benchmark scroll surface\"",
+     "ms": 1103,
+     "text": "Done. Scrolled down.\nNow on screen:\nFixture row 38\nBenchmark scroll surface — scroll area\nFixture row 39 — Fixture row 40, Fixture row 41, Fixture row 42, Fixture row 43, Fixture row 44, Fixture row 45, Fixture row 46, Fixture row 47,…",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 67,
+     "output_tokens": 23
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Fixture row 40\"",
+     "ms": 20,
+     "text": "Could not tap \"Fixture row 40\" on the current screen; nothing changed. Read the screen and choose another target.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 25,
+     "output_tokens": 22
+    }
+   ]
+  },
+  {
+   "task": "settings_search",
+   "run": 0,
+   "ok": true,
+   "calls": 11,
+   "wall_ms": 6760,
+   "result_tokens": 615,
+   "fixed_tokens": 9174,
+   "input_tokens": 9789,
+   "output_tokens": 205,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 733,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Search Settings\"",
+     "ms": 1114,
+     "text": "Done. Tapped Search Settings.\nNow on screen:\nSearch settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 25,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"battery\" in \"Search settings\"",
+     "ms": 44,
+     "text": "\"Search settings\" matches 2 items. Add number 1 to 2 after the quoted label, in reading order, for example \"Search settings\" number 2.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 35,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 10,
+     "text": "Search settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Battery\"",
+     "ms": 17,
+     "text": "No item labeled \"Battery\" is on the current screen. Nothing was run.\nOn screen now:\nSearch settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 34,
+     "output_tokens": 19
+    }
+   ]
+  },
+  {
+   "task": "settings_search",
+   "run": 1,
+   "ok": true,
+   "calls": 11,
+   "wall_ms": 7297,
+   "result_tokens": 581,
+   "fixed_tokens": 9174,
+   "input_tokens": 9755,
+   "output_tokens": 205,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 1021,
+     "text": "Done. Opened Settings.\nNow on screen:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Search Settings\"",
+     "ms": 900,
+     "text": "Done. Tapped Search Settings.\nNow on screen:\nSearch settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 25,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"battery\" in \"Search settings\"",
+     "ms": 20,
+     "text": "\"Search settings\" matches 2 items. Add number 1 to 2 after the quoted label, in reading order, for example \"Search settings\" number 2.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 35,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 18,
+     "text": "Search settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Battery\"",
+     "ms": 15,
+     "text": "No item labeled \"Battery\" is on the current screen. Nothing was run.\nOn screen now:\nSearch settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 34,
+     "output_tokens": 19
+    }
+   ]
+  },
+  {
+   "task": "settings_search",
+   "run": 2,
+   "ok": true,
+   "calls": 17,
+   "wall_ms": 14968,
+   "result_tokens": 1568,
+   "fixed_tokens": 14178,
+   "input_tokens": 15746,
+   "output_tokens": 321,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 1335,
+     "text": "The screen changed before anything ran, so nothing was done. Retry the same command.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 17,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Search Settings\"",
+     "ms": 1150,
+     "text": "No item labeled \"Search Settings\" is on the current screen. Nothing was run.\nOn screen now:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 576×1280 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 1.88 device pixels), 126 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 140,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"battery\" in \"Search settings\"",
+     "ms": 799,
+     "text": "No item labeled \"Search settings\" is on the current screen. Nothing was run.\nOn screen now:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 576×1280 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 1.88 device pixels), 126 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 140,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 5,
+     "text": "Home\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 42,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Battery\"",
+     "ms": 1043,
+     "text": "No item labeled \"Battery\" is on the current screen. Nothing was run.\nOn screen now:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app\nThe screen image is attached; use tap point X Y on it only if no listed label works. It is 576×1280 pixels, scaled down from the 1080×2400 device screen (1 image pixel = 1.88 device pixels), 126 KB. tap point and swipe take coordinates on this image; they are mapped to the device for you.",
+     "images": 1,
+     "is_error": false,
+     "result_tokens": 139,
+     "output_tokens": 19
+    }
+   ]
+  },
+  {
+   "task": "settings_search",
+   "run": 3,
+   "ok": true,
+   "calls": 9,
+   "wall_ms": 6722,
+   "result_tokens": 455,
+   "fixed_tokens": 7506,
+   "input_tokens": 7961,
+   "output_tokens": 169,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 1744,
+     "text": "Done. Opened Settings.\nNow on screen:\nSearch Settings\nGoogle — Services & preferences\nNetwork & internet — Mobile, Wi‑Fi, hotspot\nConnected devices — Bluetooth, pairing\nApps — Assistant, recent apps, default apps\nNotifications — Notification history, conversations\nSound & vibration — Volume and haptics\nModes — Do Not Disturb, Bedtime\nDisplay & touch — Dark theme, font size, touch\nWallpaper & style — Colors, themed icons, app grid",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 98,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Search Settings\"",
+     "ms": 1071,
+     "text": "Done. Tapped Search Settings.\nNow on screen:\nSearch settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 25,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"battery\" in \"Search settings\"",
+     "ms": 58,
+     "text": "\"Search settings\" matches 2 items. Add number 1 to 2 after the quoted label, in reading order, for example \"Search settings\" number 2.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 35,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 38,
+     "text": "Search settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Battery\"",
+     "ms": 18,
+     "text": "No item labeled \"Battery\" is on the current screen. Nothing was run.\nOn screen now:\nSearch settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 34,
+     "output_tokens": 19
+    }
+   ]
+  },
+  {
+   "task": "settings_search",
+   "run": 4,
+   "ok": true,
+   "calls": 13,
+   "wall_ms": 7182,
+   "result_tokens": 672,
+   "fixed_tokens": 10842,
+   "input_tokens": 11514,
+   "output_tokens": 241,
+   "trace": [
+    {
+     "tool": "android.act",
+     "command": "open app \"Settings\"",
+     "ms": 790,
+     "text": "Done. Opened Settings.\nNow on screen:\nHome\nAt a glance\nFri, Oct 9\nGmail\nPhotos\nYouTube\nPhone\nMessages\nChrome\nAU Bridge\nGoogle search\nVoice search\nGoogle Lens — button\nGoogle app",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 52,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Search Settings\"",
+     "ms": 23,
+     "text": "\"Search Settings\" matches 2 items. Add number 1 to 2 after the quoted label, in reading order, for example \"Search Settings\" number 2.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 35,
+     "output_tokens": 20
+    },
+    {
+     "tool": "android.act",
+     "command": "type \"battery\" in \"Search settings\"",
+     "ms": 19,
+     "text": "\"Search settings\" matches 2 items. Add number 1 to 2 after the quoted label, in reading order, for example \"Search settings\" number 2.",
+     "images": 0,
+     "is_error": true,
+     "result_tokens": 35,
+     "output_tokens": 24
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 11,
+     "text": "Search settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.act",
+     "command": "tap \"Battery\"",
+     "ms": 37,
+     "text": "No item labeled \"Battery\" is on the current screen. Nothing was run.\nOn screen now:\nSearch settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 34,
+     "output_tokens": 19
+    }
+   ]
+  },
+  {
+   "task": "status_and_screen",
+   "run": 0,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 9,
+   "result_tokens": 28,
+   "fixed_tokens": 1668,
+   "input_tokens": 1696,
+   "output_tokens": 32,
+   "trace": [
+    {
+     "tool": "android.read",
+     "command": "status",
+     "ms": 2,
+     "text": "Ready. Android Use is connected and can read and control the screen.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 6,
+     "text": "Search settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    }
+   ]
+  },
+  {
+   "task": "status_and_screen",
+   "run": 1,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 11,
+   "result_tokens": 28,
+   "fixed_tokens": 1668,
+   "input_tokens": 1696,
+   "output_tokens": 32,
+   "trace": [
+    {
+     "tool": "android.read",
+     "command": "status",
+     "ms": 1,
+     "text": "Ready. Android Use is connected and can read and control the screen.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 10,
+     "text": "Search settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    }
+   ]
+  },
+  {
+   "task": "status_and_screen",
+   "run": 2,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 7,
+   "result_tokens": 28,
+   "fixed_tokens": 1668,
+   "input_tokens": 1696,
+   "output_tokens": 32,
+   "trace": [
+    {
+     "tool": "android.read",
+     "command": "status",
+     "ms": 1,
+     "text": "Ready. Android Use is connected and can read and control the screen.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 5,
+     "text": "Search settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    }
+   ]
+  },
+  {
+   "task": "status_and_screen",
+   "run": 3,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 6,
+   "result_tokens": 28,
+   "fixed_tokens": 1668,
+   "input_tokens": 1696,
+   "output_tokens": 32,
+   "trace": [
+    {
+     "tool": "android.read",
+     "command": "status",
+     "ms": 1,
+     "text": "Ready. Android Use is connected and can read and control the screen.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 5,
+     "text": "Search settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    }
+   ]
+  },
+  {
+   "task": "status_and_screen",
+   "run": 4,
+   "ok": true,
+   "calls": 2,
+   "wall_ms": 7,
+   "result_tokens": 28,
+   "fixed_tokens": 1668,
+   "input_tokens": 1696,
+   "output_tokens": 32,
+   "trace": [
+    {
+     "tool": "android.read",
+     "command": "status",
+     "ms": 2,
+     "text": "Ready. Android Use is connected and can read and control the screen.",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    },
+    {
+     "tool": "android.read",
+     "command": "screen",
+     "ms": 5,
+     "text": "Search settings\nBack — button\nSearch settings — Search settings text field",
+     "images": 0,
+     "is_error": false,
+     "result_tokens": 14,
+     "output_tokens": 16
+    }
+   ]
+  }
+ ]
+}

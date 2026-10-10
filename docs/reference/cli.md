@@ -7,8 +7,8 @@ Run `au setup` once with one authorized, unlocked Android device. Use `au doctor
 | `au setup [APK]` | Enroll the device, install or update the helper, and open the Accessibility screen. |
 | `au doctor` | Explain missing device, helper, or permission state, with a resumable `next_step`. |
 | `au status` | Quick readiness check. |
-| `au read COMMAND` | Same as the `android.read` tool, e.g. `au read screen`, `au read 'find "Wi-Fi"'`. |
-| `au act COMMAND` | Same as the `android.act` tool, e.g. `au act 'tap "Wi-Fi"'`. Images are saved and returned as a path. |
+| `au read COMMAND` | Same as the `android_read` tool, e.g. `au read screen`, `au read 'find "Wi-Fi"'`. |
+| `au act COMMAND` | Same as the `android_act` tool, e.g. `au act 'tap "Wi-Fi"'`. Images are saved and returned as a path. |
 | `au serve --mcp` | MCP server over stdio for agent clients. |
 | `au devices` | List connected device endpoints and their states. |
 | `au enroll ENDPOINT` | Bind one connected hardware identity when several devices are attached. |

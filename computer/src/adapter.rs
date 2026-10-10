@@ -1,6 +1,7 @@
 use crate::{
     api::{parse_act_command, parse_read_command, tool_schemas, Code, Error, Result, MAX_FRAME},
     engine::{plain_error, Engine, ModelResponse},
+    spec,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
@@ -36,13 +37,6 @@ fn serve(mut handle: impl FnMut(Value) -> Option<Value>) -> Result<()> {
 /// MCP protocol revisions this server speaks, newest first.
 const PROTOCOL_VERSIONS: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"];
 
-/// Server-level guidance that MCP clients may place in the agent's context.
-const INSTRUCTIONS: &str = "Android Use controls one real Android device. android.read looks without changing anything; android.act changes the device. \
-Start with android.read screen (or page for the Chrome tab) when the state is unknown. Act on a label you saw, in straight double quotes: tap \"Wi-Fi\", type \"hello\" in \"Message\". \
-Each successful action reports what is on screen now, so a separate read is rarely needed. Join a few steps with then. \
-stale means nothing ran: retry. partial or unknown means read the screen before changing anything again; never repeat blindly. \
-Ask the user before purchases, sending messages, account or security changes, deleting data, or using the camera, microphone, location, or screen recording.";
-
 fn rpc(engine: &mut Engine, v: Value) -> Option<Value> {
     // Notifications carry no id and never get a reply.
     let id = v.get("id").cloned()?;
@@ -63,7 +57,7 @@ fn initialize(requested: Option<&str>) -> Value {
         "protocolVersion": version,
         "capabilities": {"tools": {}},
         "serverInfo": {"name": "android-use", "title": "Android Use", "version": env!("CARGO_PKG_VERSION")},
-        "instructions": INSTRUCTIONS,
+        "instructions": spec::INSTRUCTIONS,
     })
 }
 
@@ -81,13 +75,15 @@ fn new_call(engine: &mut Engine, name: &str, args: Value, request_identity: Opti
         return Err(Error::new(Code::Args, "tool calls accept only the command string"));
     }
     let command = args.get("command").and_then(Value::as_str).ok_or_else(|| Error::new(Code::Args, "command must be a string"))?;
+    // The dotted names of earlier releases are still accepted, though no longer listed: some
+    // model APIs reject dots in tool names.
     match name {
-        "android.read" => engine.model_read(parse_read_command(command)?),
-        "android.act" => {
+        spec::READ_TOOL | "android.read" => engine.model_read(parse_read_command(command)?),
+        spec::ACT_TOOL | "android.act" => {
             let actions = parse_act_command(command)?;
             engine.model_act(&actions, request_identity)
         }
-        _ => Err(Error::new(Code::Args, "tool must be android.read or android.act")),
+        _ => Err(Error::new(Code::Args, format!("tool must be {} or {}", spec::READ_TOOL, spec::ACT_TOOL))),
     }
 }
 
@@ -162,14 +158,14 @@ mod tests {
         let mut engine = Engine::at(crate::device::Paths::at(d.path().to_path_buf()).unwrap()).unwrap();
         let init = request(&mut engine, json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}));
         assert_eq!(init["result"]["protocolVersion"], "2025-03-26");
-        assert!(init["result"]["instructions"].as_str().unwrap().contains("android.read"));
+        assert!(init["result"]["instructions"].as_str().unwrap().contains("screen"));
         let future = request(&mut engine, json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2099-01-01"}}));
         assert_eq!(future["result"]["protocolVersion"], PROTOCOL_VERSIONS[0]);
         assert!(rpc(&mut engine, json!({"jsonrpc":"2.0","method":"notifications/initialized"})).is_none());
         assert_eq!(request(&mut engine, json!({"jsonrpc":"2.0","id":2,"method":"ping"}))["result"], json!({}));
         assert_eq!(request(&mut engine, json!({"jsonrpc":"2.0","id":3,"method":"resources/list"}))["error"]["code"], -32601);
         assert_eq!(request(&mut engine, json!({"jsonrpc":"2.0","id":4,"method":"tools/list"}))["result"]["tools"].as_array().unwrap().len(), 2);
-        let bad = request(&mut engine, json!({"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"android.act","arguments":{"command":"tap Save"}}}));
+        let bad = request(&mut engine, json!({"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"android_act","arguments":{"command":"tap Save"}}}));
         assert_eq!(bad["result"]["isError"], true);
         assert!(bad["result"]["content"][0]["text"].as_str().unwrap().contains("tap \"LABEL\""));
     }

@@ -1,0 +1,36 @@
+{
+  "rows": [
+    [
+      "Benchmark confirmation",
+      "",
+      "heading",
+      "",
+      true,
+      false
+    ],
+    [
+      "Deterministic fixture dialog",
+      "",
+      "",
+      "",
+      true,
+      false
+    ],
+    [
+      "CANCEL",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "CONFIRM",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ]
+  ]
+}

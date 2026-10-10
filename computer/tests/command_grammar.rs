@@ -179,12 +179,24 @@ fn parse_errors_quote_the_failing_step_and_its_canonical_form() {
 }
 
 #[test]
-fn tool_descriptions_document_every_command_family() {
-    let schemas = tool_schemas();
-    let act = schemas[1]["description"].as_str().unwrap();
-    for family in ["tap \"LABEL\"", "type \"TEXT\" in \"FIELD\"", "scroll up|down", "open app", "page click", "verify text", "tap point X Y", "then"] {
-        assert!(act.contains(family), "android.act description is missing {family}");
+fn every_documented_form_parses_and_the_descriptions_list_the_common_ones() {
+    use au::spec::{self, Tool};
+    for form in spec::FORMS {
+        for example in form.examples {
+            let parsed = match form.tool {
+                Tool::Read => parse_read_command(example).map(|_| ()),
+                Tool::Act => parse_act_command(example).map(|_| ()),
+            };
+            assert!(parsed.is_ok(), "documented example does not parse: {example}: {:?}", parsed.err().map(|e| e.message));
+        }
     }
-    assert!(schemas[0]["description"].as_str().unwrap().contains("screen matching"));
+    let schemas = tool_schemas();
+    let (read, act) = (schemas[0]["description"].as_str().unwrap(), schemas[1]["description"].as_str().unwrap());
+    assert_eq!(schemas[0]["name"], spec::READ_TOOL);
+    assert!(read.contains("screen [full|changes|matching") && read.contains("help"));
+    for family in ["tap \"LABEL\"", "type \"TEXT\" in \"FIELD\"", "scroll up|down", "open app", "page click", "verify text", "then"] {
+        assert!(act.contains(family), "{} description is missing {family}", spec::ACT_TOOL);
+    }
     assert_eq!(schemas[0]["annotations"]["readOnlyHint"], true);
+    assert!(spec::help_text().contains("tap point X Y") && !act.contains("tap point"), "rare forms live behind help");
 }

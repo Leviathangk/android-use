@@ -85,7 +85,7 @@ The release archive contains `au` and the Android Use helper together. Keep them
 If you want to use Android Use in Codex, Cursor, Claude Code, OpenClaw, Hermes, or another coding agent, paste this prompt into the agent:
 
 ```text
-Set up Android Use from the official release or repository. Preserve unrelated files, credentials, enrollments, and agent settings. Keep au beside aubridge.apk. Run au setup with one unlocked, USB-debugging-authorized device; pause for Android's Accessibility approval and resume with au doctor. Configure a local stdio MCP server using the absolute au path and serve --mcp. Verify with android.read command status and android.read command screen. Use the two command-string tools for normal work. Never use raw ADB, bypass Android prompts, or replay a partial or unknown mutation.
+Set up Android Use from the official release or repository. Preserve unrelated files, credentials, enrollments, and agent settings. Keep au beside aubridge.apk. Run au setup with one unlocked, USB-debugging-authorized device; pause for Android's Accessibility approval and resume with au doctor. Configure a local stdio MCP server using the absolute au path and serve --mcp. Verify with android_read command status and android_read command screen. Use the two command-string tools for normal work. Never use raw ADB, bypass Android prompts, or replay a partial or unknown mutation.
 ```
 
 Then ask: “Open Settings and tell me which Wi-Fi network is connected.”
@@ -102,8 +102,8 @@ claude mcp add android-use --scope user -- /ABSOLUTE/PATH/TO/au serve --mcp
 
 Codex, Cursor, VS Code, and Claude Desktop configs are in [client setup](docs/agents/clients.md). The agent receives two focused tools:
 
-- `android.read` sees what is happening: `screen`, `page`, `notifications`, ...
-- `android.act` performs the next small action: `tap "Wi-Fi"`, `type "hello" in "Message"`, ...
+- `android_read` sees what is happening: `screen`, `page`, `notifications`, ...
+- `android_act` performs the next small action: `tap "Wi-Fi"`, `type "hello" in "Message"`, ...
 
 Every successful action reports the screen it led to, so the agent spends its turns acting rather than re-reading. Agents without MCP can run the same commands in a shell: `au read screen`, `au act 'tap "Wi-Fi"'`.
 

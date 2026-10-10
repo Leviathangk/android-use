@@ -1,0 +1,92 @@
+{
+  "rows": [
+    [
+      "Network & internet",
+      "",
+      "heading",
+      "",
+      true,
+      false
+    ],
+    [
+      "Navigate up",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "Internet",
+      "T-Mobile",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "SIMs",
+      "T-Mobile",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Airplane mode",
+      "",
+      "switch",
+      "unchecked",
+      true,
+      false
+    ],
+    [
+      "Hotspot & tethering",
+      "Off",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Data Saver",
+      "Off",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "VPN",
+      "None",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Private DNS",
+      "Automatic",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Adaptive connectivity",
+      "On",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Mobile network security",
+      "Network type, encryption, notification controls",
+      "control",
+      "",
+      true,
+      false
+    ]
+  ]
+}

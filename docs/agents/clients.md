@@ -53,8 +53,8 @@ Use a stdio transport with the command and arguments above. The server implement
 
 | Tool | Use |
 | --- | --- |
-| `android.read` | Look without changing anything: `screen`, `page`, `notifications`, … |
-| `android.act` | Change the device: `tap "Wi-Fi"`, `type "hello" in "Message"`, `page open "https://…"`, … |
+| `android_read` | Look without changing anything: `screen`, `page`, `notifications`, … |
+| `android_act` | Change the device: `tap "Wi-Fi"`, `type "hello" in "Message"`, `page open "https://…"`, … |
 
 Each takes one string argument, `command`. Some clients show the names with dots replaced (for example `android_read`); they are the same tools. The tool descriptions list the common commands, so an agent can work from them alone; the [agent protocol](../reference/agent-protocol.md) explains results in more depth.
 
@@ -72,4 +72,4 @@ Images an agent asks for (for example `au act 'capture screen'`) are saved under
 
 ## Check the connection
 
-Ask the agent to run `android.read` with `status`, then `screen`. A healthy setup answers `Ready. Android Use is connected…` followed by the visible controls. If not, `au doctor` on the computer explains the next step.
+Ask the agent to run `android_read` with `status`, then `screen`. A healthy setup answers `Ready. Android Use is connected…` followed by the visible controls. If not, `au doctor` on the computer explains the next step.

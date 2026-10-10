@@ -1,0 +1,357 @@
+//! Bounded at-most-once operation journal shared by every Android Use process
+//! on this computer.
+//!
+//! Each mutation is recorded as `pending` (durably) before it is dispatched and
+//! as `done` with its receipt afterwards. A replayed operation id returns the
+//! stored receipt, or `unknown` while its outcome is still pending, so a
+//! mutation is never silently repeated.
+//!
+//! A pending record that outlives the process that wrote it means the device
+//! may have acted without the host learning the outcome. The journal then
+//! fences new mutations: they return `unknown` until the agent reads the screen,
+//! which calls [`Journal::reconcile`] and resolves those records as `unknown`.
+//! Every access takes an exclusive lock on a sidecar file and reloads the
+//! journal first, so the CLI and the MCP server can share one journal.
+use crate::{
+    api::{Code, Error, Receipt, Result},
+    artifact::valid,
+    device::{atomic, Paths},
+};
+use serde_json::{json, Value};
+use std::{
+    collections::{HashMap, VecDeque},
+    fs::{self, OpenOptions},
+    io::{ErrorKind, Write},
+    path::PathBuf,
+};
+
+const MAX_FILE: u64 = 2 * 1024 * 1024;
+const COMPACT_AT: u64 = 1024 * 1024;
+const MAX_RECORD: usize = 2048;
+const MAX_ENTRIES: usize = 1024;
+const REUSED: &str = "operation id was already used for a different plan";
+
+#[derive(Clone)]
+enum State {
+    Pending { digest: Box<str>, generation: u64 },
+    Done { digest: Box<str>, receipt: Receipt },
+}
+
+pub(crate) struct Journal {
+    path: PathBuf,
+    lock_path: PathBuf,
+    states: HashMap<Box<str>, State>,
+    order: VecDeque<Box<str>>,
+}
+
+/// A client resent a request id whose earlier attempt may have acted. Say so
+/// in agent terms instead of reporting a malformed request.
+pub(crate) fn explain_reuse(error: Error) -> Error {
+    if error.code == Code::Args && error.message == REUSED {
+        Error::plain(Code::Unknown, "This request was already sent once and may have run. Read the screen before doing anything else.")
+    } else {
+        error
+    }
+}
+
+pub(crate) fn unknown(id: &str, generation: u64) -> Receipt {
+    Receipt { id: id.into(), ok: 0, g: generation, m: 0, at: None, e: Some("unknown".into()), partial: None, next: Some("observe".into()), artifact: None }
+}
+
+impl Journal {
+    pub(crate) fn open(paths: &Paths) -> Result<Self> {
+        let mut journal = Self { path: paths.journal.clone(), lock_path: paths.journal.with_extension("lock"), states: HashMap::new(), order: VecDeque::new() };
+        journal.locked(|_| Ok(()))?;
+        Ok(journal)
+    }
+
+    /// Records a pending operation, or returns the outcome of an earlier
+    /// attempt with the same id and digest. While an earlier process left a
+    /// pending record behind, new operations return `unknown` without being
+    /// journaled or dispatched.
+    pub(crate) fn begin(&mut self, id: &str, generation: u64, digest: &str) -> Result<Option<Receipt>> {
+        self.locked(|journal| {
+            if let Some(state) = journal.states.get(id) {
+                return match state {
+                    State::Pending { digest: d, generation } if d.as_ref() == digest => Ok(Some(unknown(id, *generation))),
+                    State::Done { digest: d, receipt } if d.as_ref() == digest => Ok(Some(receipt.clone())),
+                    _ => Err(Error::new(Code::Args, REUSED)),
+                };
+            }
+            if journal.has_pending() {
+                return Ok(Some(unknown(id, generation)));
+            }
+            if journal.states.len() >= MAX_ENTRIES {
+                journal.trim(MAX_ENTRIES - 1)?;
+                journal.compact()?;
+            }
+            // The pending record must reach the disk before dispatch: it is what
+            // turns a crash mid-operation into `unknown` instead of a replay.
+            journal.append(json!([id, "p", digest, generation]), true)?;
+            Ok(None)
+        })
+    }
+
+    /// Records the receipt. Not forced to disk: if it is lost, the record stays
+    /// pending and the next process fences mutations until the agent reads.
+    pub(crate) fn finish(&mut self, digest: &str, receipt: &Receipt) -> Result<()> {
+        self.locked(|journal| journal.append(json!([receipt.id, "d", digest, receipt]), false))
+    }
+
+    /// Resolves every outcome still pending from an earlier process as
+    /// `unknown` and lifts the fence. Call only after the agent has read the
+    /// device, because that read is what reconciles the uncertain action.
+    pub(crate) fn reconcile(&mut self) -> Result<usize> {
+        self.locked(|journal| {
+            let pending: Vec<(Box<str>, Box<str>, u64)> = journal
+                .states
+                .iter()
+                .filter_map(|(id, state)| match state {
+                    State::Pending { digest, generation } => Some((id.clone(), digest.clone(), *generation)),
+                    State::Done { .. } => None,
+                })
+                .collect();
+            for (id, digest, generation) in &pending {
+                let receipt = serde_json::to_value(unknown(id, *generation)).map_err(|e| Error::new(Code::Io, e.to_string()))?;
+                journal.apply(&json!([id, "d", digest, receipt]));
+            }
+            if !pending.is_empty() {
+                journal.compact()?;
+            }
+            Ok(pending.len())
+        })
+    }
+
+    /// Runs `f` under the journal lock with the file reloaded, so every decision
+    /// is made on what other processes have already written.
+    fn locked<T>(&mut self, f: impl FnOnce(&mut Self) -> Result<T>) -> Result<T> {
+        let lock = OpenOptions::new().create(true).truncate(false).write(true).open(&self.lock_path)?;
+        lock.lock()?;
+        let result = self.reload().and_then(|()| f(self));
+        drop(lock);
+        result
+    }
+
+    fn reload(&mut self) -> Result<()> {
+        self.states.clear();
+        self.order.clear();
+        let bytes = match fs::read(&self.path) {
+            Ok(bytes) => bytes,
+            Err(error) if error.kind() == ErrorKind::NotFound => Vec::new(),
+            Err(error) => return Err(error.into()),
+        };
+        if bytes.len() as u64 > MAX_FILE {
+            return Err(Error::new(Code::Bounds, "operation journal exceeds 2 MiB"));
+        }
+        // A record without its newline was torn by a crash (appends hold the
+        // lock, so no writer is mid-record). Drop it before anything follows it.
+        let complete = bytes.iter().rposition(|&b| b == b'\n').map_or(0, |index| index + 1);
+        if complete < bytes.len() {
+            OpenOptions::new().write(true).open(&self.path)?.set_len(complete as u64)?;
+        }
+        for line in String::from_utf8_lossy(&bytes[..complete]).lines().filter(|line| line.len() <= MAX_RECORD) {
+            if let Ok(value) = serde_json::from_str::<Value>(line) {
+                self.apply(&value);
+            }
+        }
+        if self.trim(MAX_ENTRIES)? {
+            self.compact()?;
+        }
+        Ok(())
+    }
+
+    fn has_pending(&self) -> bool {
+        self.states.values().any(|state| matches!(state, State::Pending { .. }))
+    }
+
+    fn apply(&mut self, v: &Value) {
+        let Some(a) = v.as_array() else { return };
+        let (Some(id), Some(kind), Some(digest)) = (a.first().and_then(Value::as_str), a.get(1).and_then(Value::as_str), a.get(2).and_then(Value::as_str)) else { return };
+        if !valid(id) || digest.len() != 64 {
+            return;
+        }
+        if let Some(pos) = self.order.iter().position(|v| v.as_ref() == id) {
+            self.order.remove(pos);
+        }
+        self.order.push_back(id.into());
+        match kind {
+            "p" => {
+                if let Some(g) = a.get(3).and_then(Value::as_u64) {
+                    self.states.insert(id.into(), State::Pending { digest: digest.into(), generation: g });
+                }
+            }
+            "d" => {
+                if let Some(r) = a.get(3).cloned().and_then(|v| serde_json::from_value::<Receipt>(v).ok()) {
+                    self.states.insert(id.into(), State::Done { digest: digest.into(), receipt: r });
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// Appends one record in a single write. If the write fails, the partial
+    /// record is rolled back so later records are never glued onto it.
+    fn append(&mut self, v: Value, durable: bool) -> Result<()> {
+        let mut line = serde_json::to_vec(&v).map_err(|e| Error::new(Code::Io, e.to_string()))?;
+        if line.len() > MAX_RECORD {
+            return Err(Error::new(Code::Bounds, "journal record exceeds limit"));
+        }
+        line.push(b'\n');
+        let mut file = OpenOptions::new().create(true).append(true).open(&self.path)?;
+        let before = file.metadata()?.len();
+        let written = file.write_all(&line).and_then(|()| if durable { file.sync_all() } else { Ok(()) });
+        if let Err(error) = written {
+            let _ = file.set_len(before);
+            return Err(error.into());
+        }
+        self.apply(&v);
+        let size = file.metadata()?.len();
+        if self.trim(MAX_ENTRIES)? || size > COMPACT_AT {
+            drop(file);
+            self.compact()?;
+        }
+        Ok(())
+    }
+
+    /// Evicts the oldest completed operations. Pending operations are never
+    /// evicted: forgetting one could let an uncertain mutation be replayed.
+    fn trim(&mut self, max: usize) -> Result<bool> {
+        let mut changed = false;
+        while self.states.len() > max {
+            let Some(pos) = self.order.iter().position(|id| matches!(self.states.get(id.as_ref()), Some(State::Done { .. }))) else {
+                return Err(Error::new(Code::Bounds, "operation journal is full of unresolved operations"));
+            };
+            if let Some(id) = self.order.remove(pos) {
+                self.states.remove(id.as_ref());
+                changed = true;
+            }
+        }
+        Ok(changed)
+    }
+
+    fn compact(&self) -> Result<()> {
+        let mut bytes = Vec::new();
+        for id in &self.order {
+            let value = match self.states.get(id.as_ref()) {
+                Some(State::Pending { digest, generation }) => json!([id, "p", digest, generation]),
+                Some(State::Done { digest, receipt }) => json!([id, "d", digest, receipt]),
+                None => continue,
+            };
+            bytes.extend_from_slice(&serde_json::to_vec(&value).map_err(|e| Error::new(Code::Io, e.to_string()))?);
+            bytes.push(b'\n');
+        }
+        atomic(&self.path, &bytes)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const A: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+    const B: &str = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
+
+    fn receipt(id: &str) -> Receipt {
+        Receipt { id: id.into(), ok: 1, g: 42, m: 1, at: None, e: None, partial: None, next: None, artifact: None }
+    }
+
+    fn open(dir: &tempfile::TempDir) -> Journal {
+        Journal::open(&Paths::at(dir.path().to_path_buf()).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn journal_unknown_and_dedupe() {
+        let d = tempfile::tempdir().unwrap();
+        let mut j = open(&d);
+        assert!(j.begin("8", 41, A).unwrap().is_none());
+        assert_eq!(j.begin("8", 41, A).unwrap().unwrap().e.as_deref(), Some("unknown"));
+        assert_eq!(j.begin("8", 41, B).unwrap_err().code, Code::Args);
+    }
+
+    #[test]
+    fn a_crashed_pending_record_fences_new_mutations_until_reconciled() {
+        let d = tempfile::tempdir().unwrap();
+        {
+            let mut j = open(&d);
+            assert!(j.begin("finished", 7, B).unwrap().is_none());
+            j.finish(B, &receipt("finished")).unwrap();
+            // Left pending: the process "crashes" before recording an outcome.
+            assert!(j.begin("crashed", 7, A).unwrap().is_none());
+        }
+        let mut j = open(&d);
+        assert_eq!(j.begin("crashed", 7, A).unwrap().unwrap().e.as_deref(), Some("unknown"), "same id is unknown");
+        assert_eq!(j.begin("finished", 7, B).unwrap().unwrap().ok, 1, "completed ids replay their receipt");
+        let fresh = j.begin("fresh", 9, A).unwrap().unwrap();
+        assert_eq!(fresh.e.as_deref(), Some("unknown"), "new mutations are fenced");
+        assert_eq!(j.reconcile().unwrap(), 1);
+        assert!(j.begin("fresh", 9, A).unwrap().is_none(), "reconciling lifts the fence");
+        let mut reopened = open(&d);
+        assert_eq!(reopened.begin("crashed", 7, A).unwrap().unwrap().e.as_deref(), Some("unknown"), "reconciled outcome persists");
+        assert!(reopened.begin("fresh", 9, A).unwrap().is_some(), "a reopened journal stays consistent");
+    }
+
+    #[test]
+    fn a_torn_record_is_dropped_and_never_glues_onto_the_next_one() {
+        let d = tempfile::tempdir().unwrap();
+        let path = Paths::at(d.path().to_path_buf()).unwrap().journal;
+        {
+            let mut j = open(&d);
+            j.begin("first", 1, A).unwrap();
+            j.finish(A, &receipt("first")).unwrap();
+        }
+        let intact = fs::read(&path).unwrap();
+        let mut torn = intact.clone();
+        torn.extend_from_slice(br#"["torn","p","#);
+        fs::write(&path, &torn).unwrap();
+        let mut j = open(&d);
+        assert_eq!(fs::read(&path).unwrap(), intact, "the torn tail is removed on open");
+        assert!(j.begin("second", 2, B).unwrap().is_none());
+        j.finish(B, &receipt("second")).unwrap();
+        let reopened = open(&d);
+        assert!(matches!(reopened.states.get("second"), Some(State::Done { .. })), "the record after a repair is not lost");
+    }
+
+    #[test]
+    fn two_processes_share_one_journal_under_the_lock() {
+        let d = tempfile::tempdir().unwrap();
+        let mut server = open(&d);
+        let mut cli = open(&d);
+        assert!(cli.begin("pay", 3, A).unwrap().is_none());
+        assert_eq!(server.begin("other", 3, B).unwrap().unwrap().e.as_deref(), Some("unknown"), "the server sees the CLI's pending record");
+        server.reconcile().unwrap();
+        assert!(server.begin("after", 4, B).unwrap().is_none());
+    }
+
+    #[test]
+    fn pending_records_are_never_evicted() {
+        let d = tempfile::tempdir().unwrap();
+        let mut j = open(&d);
+        for i in 0..(MAX_ENTRIES + 4) {
+            j.apply(&json!([format!("p{i}"), "p", A, 1]));
+        }
+        assert!(j.trim(MAX_ENTRIES).is_err(), "a journal of only pending records refuses to evict any");
+        assert!(j.states.contains_key("p0"));
+    }
+
+    #[test]
+    fn completed_operations_are_evicted_oldest_first() {
+        let d = tempfile::tempdir().unwrap();
+        let mut j = open(&d);
+        j.apply(&json!(["keep", "p", A, 1]));
+        for i in 0..(MAX_ENTRIES + 8) {
+            let id = format!("done{i}");
+            j.apply(&json!([id, "d", B, receipt(&id)]));
+        }
+        assert!(j.trim(MAX_ENTRIES).unwrap());
+        assert_eq!(j.states.len(), MAX_ENTRIES);
+        assert!(j.states.contains_key("keep"), "pending survives eviction");
+        assert!(!j.states.contains_key("done0"));
+    }
+
+    #[test]
+    fn reused_ids_explain_themselves_to_the_agent() {
+        let explained = explain_reuse(Error::new(Code::Args, REUSED));
+        assert!(explained.plain && explained.code == Code::Unknown);
+        assert_eq!(explain_reuse(Error::new(Code::Args, "other")).code, Code::Args);
+    }
+}

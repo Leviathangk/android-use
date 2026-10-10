@@ -38,17 +38,32 @@ final class Targets {
      * field hint with the same word from becoming ambiguous.
      */
     static List<Integer> match(List<String[]> candidates, String label) {
+        return search(candidates, label).hits;
+    }
+
+    /** The matches plus the tier that produced them: 0-1 exact name or hint, 2-3 containing. */
+    static final class Hits {
+        final List<Integer> hits = new ArrayList<>();
+        int tier = 4;
+
+        boolean exact() {
+            return tier < 2;
+        }
+    }
+
+    static Hits search(List<String[]> candidates, String label) {
         String needle = normalize(label);
-        List<Integer> out = new ArrayList<>();
+        Hits out = new Hits();
         if (needle.isEmpty()) return out;
-        for (int tier = 0; tier < 4 && out.isEmpty(); tier++) {
+        for (int tier = 0; tier < 4 && out.hits.isEmpty(); tier++) {
             boolean exact = tier < 2;
             int field = tier % 2;
             for (int i = 0; i < candidates.size(); i++) {
                 String[] names = candidates.get(i);
                 String name = field < names.length ? normalize(names[field]) : "";
                 if (!name.isEmpty() && (exact ? name.equals(needle) : name.contains(needle))) {
-                    out.add(i);
+                    out.hits.add(i);
+                    out.tier = tier;
                 }
             }
         }

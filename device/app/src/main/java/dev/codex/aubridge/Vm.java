@@ -4,6 +4,7 @@ import android.accessibilityservice.GestureDescription;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -352,7 +353,14 @@ final class Vm {
         boolean apply(Context context, Ui ui, Capture capture, long end) throws Exception {
             switch (name) {
                 case "tap":
-                    return node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    if (node.isClickable() || Ui.supports(node, AccessibilityNodeInfo.ACTION_CLICK))
+                        return node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+                    // Plain text a screen reacts to (a list row without a click action): touch
+                    // the middle of that same node, which was just checked to still be on screen.
+                    Rect box = new Rect();
+                    node.getBoundsInScreen(box);
+                    if (box.isEmpty() || !node.isVisibleToUser()) return false;
+                    return gesture(ui, new JSONArray().put(xy(box.centerX(), box.centerY(), 1)));
                 case "long":
                     return node.performAction(AccessibilityNodeInfo.ACTION_LONG_CLICK);
                 case "text":

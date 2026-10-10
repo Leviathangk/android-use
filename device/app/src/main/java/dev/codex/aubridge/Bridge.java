@@ -139,7 +139,8 @@ final class Bridge implements AutoCloseable {
                             .put(seq)
                             .put(0)
                             .put(ui == null ? 0 : ui.generation())
-                            .put(ui == null ? 0 : 7);
+                            .put(ui == null ? 0 : 7)
+                            .put(ui == null ? "" : ui.activePackage());
                 case "observe":
                     if (ui == null) return err(seq, 10);
                     return ui.observe(seq, q.isNull(2) ? null : q.optString(2), q.optInt(3));
@@ -155,7 +156,10 @@ final class Bridge implements AutoCloseable {
                     return new JSONArray()
                             .put(seq)
                             .put(0)
-                            .put(ui.resolve(target == null ? "" : target.optString("label")));
+                            .put(
+                                    ui.resolve(
+                                            target == null ? "" : target.optString("label"),
+                                            target == null ? "" : target.optString("want")));
                 case "scroller":
                     if (ui == null) return err(seq, 10);
                     return new JSONArray().put(seq).put(0).put(ui.scroller(q.optString(2)));

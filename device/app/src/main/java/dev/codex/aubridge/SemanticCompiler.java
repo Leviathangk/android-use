@@ -257,6 +257,16 @@ final class SemanticCompiler {
                 }
             }
 
+            // Many plain texts under one parent are a list or a page of lines, not one row with a
+            // long value: each stays its own row so the agent can read and target it.
+            if ((control == null || control.label.isEmpty()) && labels.size() > 3) {
+                for (Item item : labels)
+                    rows.add(
+                            new Row(item.label, "", kind(null, item), "", item.enabled, false)
+                                    .at(item));
+                continue;
+            }
+
             String label = labels.get(0).label;
             String value = "";
             if (control != null && control.editable) {
@@ -351,6 +361,8 @@ final class SemanticCompiler {
         for (Item owner : owners) {
             if (item == owner) return owner;
             if (!item.hasBounds() || !owner.hasBounds()) continue;
+            // A container that merely surrounds a small control is not part of that control.
+            if (item.area() > owner.area()) continue;
             int cx = item.centerX(), cy = item.centerY();
             if (cx < owner.left || cx > owner.right || cy < owner.top || cy > owner.bottom)
                 continue;

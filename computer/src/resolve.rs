@@ -143,6 +143,41 @@ pub(crate) fn notification(value: &Value, target: &Target) -> Result<Box<str>> {
     pick(target, &candidates, "notification list")
 }
 
+/// Words that make an extra label word unsafe to guess at: `tap "Save"` may tap "Save draft",
+/// but never "Save and delete all".
+const RISKY: [&str; 20] = [
+    "delete",
+    "remove",
+    "erase",
+    "reset",
+    "pay",
+    "buy",
+    "send",
+    "submit",
+    "confirm",
+    "all",
+    "clear",
+    "wipe",
+    "sign",
+    "log",
+    "logout",
+    "purchase",
+    "order",
+    "install",
+    "uninstall",
+    "factory",
+];
+
+/// Whether the only control whose label merely contains `wanted` is plainly what the agent meant:
+/// the wanted words lead or trail the label, at most two other words come with them, and none of
+/// those is destructive.
+pub(crate) fn near_miss(wanted: &str, actual: &str) -> bool {
+    let (wanted, actual) = (normalized(wanted), normalized(actual));
+    let aligned = actual.starts_with(&format!("{wanted} ")) || actual.ends_with(&format!(" {wanted}"));
+    let extra: Vec<&str> = actual.split(' ').filter(|word| !wanted.split(' ').any(|w| w == *word)).collect();
+    aligned && extra.len() <= 2 && !extra.iter().any(|word| RISKY.contains(word))
+}
+
 /// A label missing from the Android screen (not a page, app, or
 /// notification): the case where showing the screen helps the agent most.
 pub(crate) fn is_screen_miss(error: &Error) -> bool {
@@ -176,6 +211,16 @@ mod tests {
         assert_eq!(pick(&target("Inbox 3", None), &candidates, "screen").unwrap(), 1);
         assert_eq!(pick(&target("[]", None), &candidates, "screen").unwrap_err().code, Code::Missing);
         assert!(ambiguity("Photo", 40).contains("more specific label"));
+    }
+
+    #[test]
+    fn near_misses_are_guessed_only_when_safe() {
+        assert!(near_miss("Save", "Save draft"));
+        assert!(near_miss("Wi-Fi", "Wi-Fi settings"));
+        assert!(!near_miss("Save", "Save and delete all"), "destructive words are never guessed");
+        assert!(!near_miss("Save", "Autosave"), "word boundaries");
+        assert!(!near_miss("Save", "Save changes to this document and close"), "too many extra words");
+        assert!(!near_miss("Open", "Open and send"), "send is risky");
     }
 
     #[test]

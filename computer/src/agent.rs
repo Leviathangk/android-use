@@ -1,8 +1,7 @@
 //! The agent-facing layer: one plain command in, short plain-language text
 //! (and at most one image) out.
 //!
-//! Commands compile into the same generation-checked plans as the legacy
-//! JSON surface and run through `Engine::run_plan`, so the journal, stale
+//! Commands compile into generation-checked plans and run through `Engine::run_plan`, so the journal, stale
 //! checks, and mutation budgets apply unchanged. This layer adds target
 //! resolution by label, plain results, and a short view of the screen after
 //! every change so an agent rarely needs a separate read.
@@ -29,7 +28,11 @@ use std::{
 /// long (bounded by `SETTLE_LIMIT`) before summarizing the screen.
 const SETTLE_POLL: Duration = Duration::from_millis(80);
 const SETTLE_QUIET: Duration = Duration::from_millis(240);
+/// Quiet period after typing, long enough for a debounced search to show its results.
+const TYPED_QUIET: Duration = Duration::from_millis(900);
 const SETTLE_LIMIT: Duration = Duration::from_millis(1500);
+/// A launched app may need longer to cold-start than a tap needs to redraw.
+const LAUNCH_LIMIT: Duration = Duration::from_millis(5000);
 pub(crate) const SPACE_FILE: &str = "screen-space.json";
 const UNFETCHED: &str = " The captured file could not be retrieved; capture again if you need it.";
 
@@ -68,6 +71,13 @@ pub(crate) struct AgentState {
     replies: Vec<(Box<str>, Result<ModelResponse>)>,
     /// Point mappings applied while compiling the current command, reported in its result.
     mapping: Vec<String>,
+    /// Whether the last target resolved by a containing label rather than an exact one.
+    loose: bool,
+    /// The last plan typed text: search and suggestion lists fill in a moment later, so the next
+    /// settle waits through a longer quiet period.
+    typed: bool,
+    /// Package the last plan launched; the next settle waits for it to be in front.
+    expect: Option<Box<str>>,
 }
 
 #[derive(Clone, Copy)]
@@ -264,7 +274,15 @@ impl Engine {
         match surface {
             Surface::Android => {
                 self.settle();
-                let rows = self.semantic_rows("").ok()?;
+                let mut rows = self.semantic_rows("").ok()?;
+                // A tree that is still empty is a window being drawn, not a blank screen.
+                for _ in 0..2 {
+                    if !rows.is_empty() {
+                        break;
+                    }
+                    self.settle();
+                    rows = self.semantic_rows("").ok()?;
+                }
                 let text = format_semantic_rows(&rows, false, "");
                 self.agent.snapshot = Some(rows);
                 Some(format!("Now on screen:\n{text}"))
@@ -277,14 +295,20 @@ impl Engine {
     /// screen an action led to rather than a transition. Bounded and
     /// best-effort: a continuously animating screen is summarized as-is.
     fn settle(&mut self) {
+        let expect = self.agent.expect.take();
+        let quiet = if std::mem::take(&mut self.agent.typed) { TYPED_QUIET } else { SETTLE_QUIET };
+        let limit = if expect.is_some() { LAUNCH_LIMIT } else { SETTLE_LIMIT };
         let started = Instant::now();
         let (mut last, mut quiet_since) = (None, Instant::now());
-        while started.elapsed() < SETTLE_LIMIT {
+        while started.elapsed() < limit {
             thread::sleep(SETTLE_POLL);
-            let Ok((generation, _)) = self.bridge_read(|bridge| bridge.status()) else { return };
+            let Ok((generation, _, package)) = self.bridge_read(|bridge| bridge.status_full()) else { return };
             if last != Some(generation) {
                 (last, quiet_since) = (Some(generation), Instant::now());
-            } else if quiet_since.elapsed() >= SETTLE_QUIET {
+            }
+            // An older helper reports no package; then only quiet counts.
+            let in_front = expect.as_deref().is_none_or(|want| package.as_deref().is_none_or(|front| front == want));
+            if in_front && quiet_since.elapsed() >= quiet {
                 return;
             }
         }
@@ -313,11 +337,32 @@ impl Engine {
     fn android_attempt(&mut self, actions: &[Action], identity: Option<&str>) -> Result<(Step, usize)> {
         self.agent.mapping.clear();
         let scene = self.ensure_scene()?;
-        let mut ops = Vec::with_capacity(actions.len());
+        let mut ops: Vec<Op> = Vec::with_capacity(actions.len());
         for (index, action) in actions.iter().enumerate() {
             let Action::Android(action) = action else { return Err(Error::new(Code::Protocol, "an action group mixed surfaces")) };
-            match self.compile_android(action, &scene) {
-                Ok(op) => ops.push(op),
+            self.agent.loose = false;
+            let noted = self.agent.mapping.len();
+            let compiled = self.compile_android(action, &scene);
+            // A containing-label match after a change may be the old screen's control; wait for
+            // the change to settle and resolve it against the screen it leads to.
+            let compiled = match compiled {
+                Ok(_) if self.agent.loose && ops.iter().any(|op| op.mutates()) => {
+                    self.agent.mapping.truncate(noted);
+                    Err(resolve::missing(&target_label(action), "screen"))
+                }
+                other => other,
+            };
+            match compiled {
+                Ok(op) => {
+                    ops.push(op);
+                    // What follows a launch, link, setting, key, or notification open belongs to
+                    // the screen it leads to, so it is compiled only after that screen is up.
+                    if index + 1 < actions.len() && navigates(action) {
+                        let step = self.run_android(&actions[..=index], ops, &scene, identity)?;
+                        self.settle();
+                        return Ok((step, index + 1));
+                    }
+                }
                 Err(error) if resolve::is_screen_miss(&error) && ops.iter().any(|op| op.mutates() || matches!(op, Op::Wait(..))) => {
                     let step = self.run_android(&actions[..index], ops, &scene, identity)?;
                     self.settle();
@@ -333,6 +378,8 @@ impl Engine {
         if ops.len() > MAX_OPS || ops.iter().filter(|op| op.mutates()).count() > usize::from(MAX_MUTATIONS) {
             return Err(Error::new(Code::Bounds, "the action command exceeds its safety limit"));
         }
+        self.agent.typed = ops.iter().any(|op| matches!(op, Op::Text(..)));
+        self.agent.expect = ops.iter().rev().find_map(|op| if let Op::Launch(package) = op { Some(package.clone()) } else { None });
         let plan = Plan {
             id: self.operation_id(identity, "android").into_boxed_str(),
             generation: scene.generation,
@@ -392,8 +439,8 @@ impl Engine {
         Ok(match action {
             A::Tap(target) | A::Toggle(target) => Op::Tap(self.resolve_target(scene, target)?),
             A::Hold(target) => Op::Long(self.resolve_target(scene, target)?),
-            A::Type { text, target } => Op::Text(self.resolve_target(scene, target)?, text.clone()),
-            A::Scroll { direction, target } => Op::Scroll(self.resolve_target(scene, target)?, *direction),
+            A::Type { text, target } => Op::Text(self.resolve_target_as(scene, target, "edit")?, text.clone()),
+            A::Scroll { direction, target } => Op::Scroll(self.resolve_target_as(scene, target, "scroll")?, *direction),
             A::ScrollScreen(direction) => Op::Scroll(self.main_scroller(scene, *direction)?, *direction),
             A::Key(key) => Op::Key(*key),
             A::WaitTarget { target, seconds } => Op::Wait(Predicate::Exists(Match::Label(target.label.clone())), seconds.saturating_mul(1000)),
@@ -428,9 +475,31 @@ impl Engine {
     /// Asks the helper, which sees the full accessibility tree, to resolve the
     /// label; falls back to the cached scene for helpers that cannot.
     fn resolve_target(&mut self, scene: &Scene, target: &Target) -> Result<u16> {
-        let args = json!({"label": target.label.as_ref(), "ordinal": target.ordinal.unwrap_or(0)});
+        self.resolve_target_as(scene, target, "")
+    }
+
+    /// `want` is `"edit"` when the step needs a text field and `"scroll"` when it needs a scrollable
+    /// area, so a heading or a control with the same words is not a candidate.
+    fn resolve_target_as(&mut self, scene: &Scene, target: &Target, want: &str) -> Result<u16> {
+        let args = json!({"label": target.label.as_ref(), "ordinal": target.ordinal.unwrap_or(0), "want": want});
         match self.bridge_read(|bridge| bridge.query("resolve", args.clone())) {
-            Ok(value) => resolve::choose(target, helper_refs(&value)?, "screen"),
+            Ok(value) => {
+                let (refs, tier, labels) = helper_resolution(&value)?;
+                // A single control whose label only contains the request is acted on when it is
+                // plainly what was meant, and the result names it; otherwise it counts as missing.
+                if tier >= 2 && refs.len() == 1 && target.ordinal.is_none() {
+                    let actual = labels.first().map(String::as_str).unwrap_or_default();
+                    if !resolve::near_miss(&target.label, actual) {
+                        return Err(Error::plain(
+                            Code::Missing,
+                            format!("{}; the closest label is \"{}\", which was not tapped", resolve::missing(&target.label, "screen").message, display(actual)),
+                        ));
+                    }
+                    self.agent.mapping.push(format!("\"{}\" is the closest label to \"{}\"", display(actual), display(&target.label)));
+                }
+                self.agent.loose = tier >= 2 && !refs.is_empty();
+                resolve::choose(target, refs, "screen")
+            }
             Err(error) if error.code == Code::Unsupported => resolve::scene_target(scene, target),
             Err(error) => Err(error),
         }
@@ -650,6 +719,15 @@ fn compile_browser(action: &BrowserAction, observed: &Value, browser: &Browser) 
     })
 }
 
+/// Refs, match tier (2+ means no exact label), and matched labels from the helper's resolver.
+/// Older helpers answer with a bare list of refs, all of them exact.
+fn helper_resolution(value: &Value) -> Result<(Vec<u16>, u64, Vec<String>)> {
+    let Some(object) = value.as_object() else { return Ok((helper_refs(value)?, 0, Vec::new())) };
+    let refs = helper_refs(object.get("r").unwrap_or(&Value::Null))?;
+    let labels = object.get("l").and_then(Value::as_array).map(|labels| labels.iter().filter_map(|label| label.as_str().map(str::to_owned)).collect()).unwrap_or_default();
+    Ok((refs, object.get("t").and_then(Value::as_u64).unwrap_or(0), labels))
+}
+
 fn helper_refs(value: &Value) -> Result<Vec<u16>> {
     let refs = value.as_array().filter(|refs| refs.len() <= 256).ok_or_else(|| Error::new(Code::Protocol, "semantic target resolver returned an invalid list"))?;
     refs.iter()
@@ -686,6 +764,20 @@ fn deadline(actions: &[Action]) -> u32 {
         .max()
         .unwrap_or(0);
     longest.clamp(8000, 30_000)
+}
+
+fn target_label(action: &AndroidAction) -> String {
+    use AndroidAction as A;
+    match action {
+        A::Tap(t) | A::Toggle(t) | A::Hold(t) | A::Type { target: t, .. } | A::Scroll { target: t, .. } => t.label.to_string(),
+        _ => String::new(),
+    }
+}
+
+/// Whether an action can bring up a different screen than the one it was compiled against.
+fn navigates(action: &AndroidAction) -> bool {
+    use AndroidAction as A;
+    matches!(action, A::OpenApp(_) | A::OpenSetting(_) | A::OpenLink(_) | A::Key(_) | A::NotificationOpen(_) | A::NotificationAction(_))
 }
 
 fn is_media(action: &Action) -> bool {

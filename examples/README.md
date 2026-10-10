@@ -24,5 +24,3 @@ au act 'open app "DISPLAY NAME" then tap "TARGET"'
 ```
 
 Use labels, not guessed coordinates. If a label is duplicated, the screen shows the `number N` to add. Each successful action reports the new screen. If a result is partial or unknown, read first and reconcile; never replay blindly.
-
-`au serve --jsonl` also accepts the old structured envelopes; they are documented only for compatibility.

@@ -3,7 +3,7 @@
 Android Use is designed for one locally enrolled device per server process. For unattended or shared environments:
 
 - Give the Android device and host OS account a single clear owner.
-- Keep ADB and the MCP/JSONL process private. Do not expose stdio through an unauthenticated network bridge.
+- Keep ADB and the MCP process private. Do not expose stdio through an unauthenticated network bridge.
 - Treat USB debugging trust as device-control authority.
 - Grant camera, microphone, location, notification, and screen-capture permissions only when required.
 - Store artifacts on encrypted host storage and define a retention policy.

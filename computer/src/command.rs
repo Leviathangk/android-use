@@ -485,7 +485,7 @@ fn parse_android_action(t: &[Lexeme]) -> Result<AndroidAction> {
     if t.len() == 3 && is_word(t, 0, "open") && is_word(t, 1, "link") {
         let url = quoted_at(t, 2, "link")?;
         if !safe_url(&url) {
-            return Err(Error::new(Code::Args, "link must be an http(s) URL"));
+            return Err(Error::new(Code::Args, "link must be an http(s), geo:, or google.navigation: URL"));
         }
         return Ok(AndroidAction::OpenLink(url));
     }

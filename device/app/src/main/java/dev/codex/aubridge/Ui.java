@@ -8,6 +8,7 @@ import android.view.accessibility.AccessibilityEvent;
 import android.view.accessibility.AccessibilityNodeInfo;
 
 import org.json.JSONArray;
+import org.json.JSONObject;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -49,6 +50,15 @@ public final class Ui extends AccessibilityService {
         if (instance == this) instance = null;
         clear();
         super.onDestroy();
+    }
+
+    /** Package of the window in front, so the host can tell a launched app has appeared. */
+    String activePackage() {
+        AccessibilityNodeInfo root = getRootInActiveWindow();
+        if (root == null) return "";
+        CharSequence name = root.getPackageName();
+        root.recycle();
+        return name == null ? "" : shorten(name.toString(), 255);
     }
 
     long generation() {
@@ -156,21 +166,84 @@ public final class Ui extends AccessibilityService {
         return out;
     }
 
-    JSONArray resolve(String label) throws Bridge.Limit {
+    /**
+     * Owners of the controls that {@code label} names, in listing order, as {@code {r: refs, t:
+     * tier, l: matched labels}}. A tier of 2 or more means no control had exactly that label.
+     */
+    JSONObject resolve(String label, String want) throws Bridge.Limit {
         Scene s = snapshot();
         s.exposed = Math.min(s.frontier, s.nodes.size());
         List<String[]> names = new ArrayList<>(s.nodes.size());
         for (N n : s.nodes) names.add(new String[] {n.semanticLabel, n.hint});
+        Targets.Hits found = Targets.search(names, label);
         List<N> owners = new ArrayList<>();
-        for (int index : Targets.match(names, label)) {
-            N owner = owner(s, s.nodes.get(index));
-            if (owner != null && !owners.contains(owner)) owners.add(owner);
+        List<String> labels = new ArrayList<>();
+        for (int index : found.hits) {
+            N node = s.nodes.get(index);
+            // A scroll step names the area itself, never the control drawn over its middle.
+            N owner =
+                    "scroll".equals(want)
+                            ? (node.node.isScrollable() ? node : null)
+                            : owner(s, node);
+            if (owner != null && !owners.contains(owner)) {
+                owners.add(owner);
+                labels.add(
+                        found.tier % 2 == 0
+                                ? s.nodes.get(index).semanticLabel
+                                : s.nodes.get(index).hint);
+            }
         }
+        // Plain text that shares its words with a control (a title above the field it names) is not
+        // a candidate when the control is there: a step needing a field takes only fields, any
+        // other takes only controls.
+        List<Integer> keep = new ArrayList<>();
+        for (int i = 0; i < owners.size(); i++) {
+            N n = owners.get(i);
+            if ("scroll".equals(want)
+                    || ("edit".equals(want) ? n.node.isEditable() : n.interactive())) keep.add(i);
+        }
+        if (!keep.isEmpty() && keep.size() < owners.size()) {
+            List<N> ownersKept = new ArrayList<>();
+            List<String> labelsKept = new ArrayList<>();
+            for (int i : keep) {
+                ownersKept.add(owners.get(i));
+                labelsKept.add(labels.get(i));
+            }
+            owners = ownersKept;
+            labels = labelsKept;
+        }
+        // A row and the switch inside it both carry the row's words; they are one target, the
+        // inner one.
+        List<N> listed = new ArrayList<>();
+        List<String> shownLabels = new ArrayList<>();
+        for (int i = 0; i < owners.size(); i++) {
+            boolean wraps = false;
+            for (int j = 0; j < owners.size() && !wraps; j++) {
+                wraps = j != i && owners.get(i).wraps(owners.get(j));
+            }
+            if (!wraps) {
+                listed.add(owners.get(i));
+                shownLabels.add(labels.get(i));
+            }
+        }
+        labels = shownLabels;
         // Top to bottom, then left to right: the order the screen listing numbers duplicates in.
-        owners.sort(Comparator.comparingInt((N n) -> n.top).thenComparingInt(n -> n.left));
-        JSONArray out = new JSONArray();
-        for (N owner : owners) if (out.length() < 64) out.put(owner.id);
-        return out;
+        List<Integer> order = new ArrayList<>();
+        for (int i = 0; i < listed.size(); i++) order.add(i);
+        order.sort(
+                Comparator.comparingInt((Integer i) -> listed.get(i).top)
+                        .thenComparingInt(i -> listed.get(i).left));
+        JSONArray refs = new JSONArray(), names2 = new JSONArray();
+        for (int i : order) {
+            if (refs.length() >= 64) break;
+            refs.put(listed.get(i).id);
+            names2.put(shorten(labels.get(i), 96));
+        }
+        try {
+            return new JSONObject().put("r", refs).put("t", found.tier).put("l", names2);
+        } catch (org.json.JSONException e) {
+            throw new Bridge.Limit();
+        }
     }
 
     /**
@@ -536,6 +609,17 @@ public final class Ui extends AccessibilityService {
 
         boolean decision() {
             return !label.isEmpty() || (flags & 9) != 0 || node.isEditable() || node.isCheckable();
+        }
+
+        /** Whether {@code inner} lies fully inside this node and is a different, smaller node. */
+        boolean wraps(N inner) {
+            return inner != this
+                    && left <= inner.left
+                    && top <= inner.top
+                    && right >= inner.right
+                    && bottom >= inner.bottom
+                    && (right - left) * (bottom - top)
+                            > (inner.right - inner.left) * (inner.bottom - inner.top);
         }
 
         boolean contains(N other) {

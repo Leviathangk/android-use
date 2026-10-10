@@ -25,7 +25,3 @@ A successful Android action says what ran, then `Now on screen:` with the settle
 ## Images and coordinates
 
 When a screen exposes little text, or a label is missing, its image is attached, compressed for you (usually 20–200 KB); the text states its size and scale. `tap point X Y` and `swipe from X1 Y1 to X2 Y2 over MS milliseconds` use coordinates on that image, and the result confirms the device pixel hit. Points outside the image are refused. Any screen change ends the image: capture again before using points, and after rotating. Audio and video are saved to a file path.
-
-## Legacy JSON
-
-The structured JSON forms remain accepted for CLI, JSONL, and MCP callers that do not send `command`. They are deprecated and not advertised. Grammar summary: [installed protocol reference](../../skills/android-use/references/protocol.md).

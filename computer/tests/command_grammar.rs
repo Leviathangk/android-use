@@ -1,29 +1,30 @@
-//! The public command grammar and legacy wire contract, tested through `au::api`.
+//! The public command grammar and wire contract, tested through `au::api`.
 use au::api::*;
 use serde_json::{json, Value};
 
 #[test]
-fn parses_plan_and_matches_golden_wire() {
+fn plan_wire_matches_the_golden_frame_the_helper_tests_also_read() {
     let v: Value = serde_json::from_str(include_str!("../../protocol-golden.json")).unwrap();
-    let p = Plan::parse(v["plan"].clone()).unwrap();
-    assert_eq!(p.wire(17), v["frame"]);
+    let plan = Plan {
+        id: "9".into(),
+        generation: 44,
+        deadline_ms: 8000,
+        max_mutations: 16,
+        ops: vec![Op::Text(2, "Austin".into()), Op::Tap(5), Op::Wait(Predicate::Text("Welcome".into()), 2000)].into_boxed_slice(),
+    };
+    assert_eq!(plan.wire(17), v["frame"]);
 }
+
 #[test]
-fn rejects_oversized_and_branching_plans() {
-    assert_eq!(Plan::parse(json!({"id":"x","g":1,"p":[["branch",1]]})).unwrap_err().code, Code::Unsupported);
-    assert_eq!(Plan::parse(json!({"id":"x","g":1,"p":[["text",1,"x".repeat(MAX_TEXT+1)]]})).unwrap_err().code, Code::Bounds);
-    assert_eq!(Plan::parse(json!({"id":"x","g":1,"p":[["microphone",31]]})).unwrap_err().code, Code::Bounds);
+fn commands_compile_within_the_safety_limits() {
+    let long = "x".repeat(MAX_TEXT + 1);
+    for command in [format!(r#"type "{long}" in "Field""#), r#"record microphone for 31 seconds"#.to_owned(), format!("tap \"A\"{}", r#" then tap "A""#.repeat(40))] {
+        assert!(parse_act_command(&command).is_err(), "{command}");
+    }
+    assert_eq!(parse_act_command(r#"take rear camera photo then record microphone for 1 seconds then dismiss notification "n""#).unwrap().len(), 3);
+    assert!(parse_act_command(r#"page eval "1+1""#).is_err(), "no arbitrary page script");
 }
-#[test]
-fn parses_bounded_browser_plan() {
-    let plan = BrowserPlan::parse(json!({"target":"browser","id":"b1","g":4,"p":[["navigate","https://example.com"],["wait",["text","Example Domain"],1000]]})).unwrap();
-    assert_eq!(plan.ops.len(), 2);
-    assert_eq!(plan.wire(9)[1], "browser");
-    assert_eq!(BrowserPlan::parse(json!({"target":"browser","id":"b2","g":4,"p":[["eval","1+1"]]})).unwrap_err().code, Code::Unsupported);
-    assert_eq!(Plan::parse(json!({"id":"m1","g":1,"p":[["camera","rear"],["microphone",1],["notification_dismiss","n"]]})).unwrap().ops.len(), 3);
-    let visual = VisualPlan::parse(json!({"target":"visual","id":"v1","g":0,"p":[["crop","habc",0,0,1,1]]})).unwrap();
-    assert_eq!(visual.wire(1)[1], "visual");
-}
+
 #[test]
 fn schemas_export_exactly_two_tools() {
     let schemas = tool_schemas();

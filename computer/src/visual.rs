@@ -3,12 +3,9 @@ use png::{BitDepth, ColorType, Decoder, Encoder};
 use serde_json::{json, Value};
 use std::io::Cursor;
 
-const MAX_PIXELS: u64 = 8_000_000;
+// Large enough for 4K-class captures (3840x2160 is about 8.3 million pixels).
+const MAX_PIXELS: u64 = 12_000_000;
 const MAX_BYTES: usize = 16 * 1024 * 1024;
-
-pub enum Op {
-    Crop { bytes: Vec<u8>, x: u32, y: u32, w: u32, h: u32 },
-}
 
 pub fn hash(bytes: &[u8]) -> Result<Value> {
     let image = decode(bytes)?;
@@ -55,21 +52,28 @@ pub fn crop(bytes: &[u8], x: u32, y: u32, w: u32, h: u32) -> Result<Vec<u8>> {
         let start = ((y + row) as usize * image.w as usize + x as usize) * 4;
         out.extend_from_slice(&image.pixels[start..start + w as usize * 4]);
     }
-    encode(w, h, &out)
+    encode(w, h, &out, crate::api::MAX_FRAME)
 }
 
-struct Image {
-    w: u32,
-    h: u32,
-    pixels: Vec<u8>,
+pub(crate) struct Image {
+    pub(crate) w: u32,
+    pub(crate) h: u32,
+    pub(crate) pixels: Vec<u8>,
 }
 
-fn decode(bytes: &[u8]) -> Result<Image> {
+pub(crate) fn decode(bytes: &[u8]) -> Result<Image> {
+    // Camera photos are JPEG. They can be shared as files, but not decoded here, and that is a
+    // limit of the tool, not a helper failure.
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        return Err(Error::plain(Code::Unsupported, "Photos are JPEG files: they can be saved and shared, but only screen captures can be cropped or compared."));
+    }
     if bytes.len() > MAX_BYTES {
         return Err(Error::new(Code::Bounds, "image exceeds 16 MiB"));
     }
     let mut decoder = Decoder::new(Cursor::new(bytes));
     decoder.set_limits(png::Limits { bytes: MAX_BYTES });
+    // Expand palettes and sub-byte depths, so compressed (indexed) screens decode like any other.
+    decoder.set_transformations(png::Transformations::EXPAND);
     let mut reader = decoder.read_info().map_err(|_| Error::new(Code::Protocol, "PNG header is invalid"))?;
     let (width, height) = (reader.info().width, reader.info().height);
     let pixels = u64::from(width).saturating_mul(u64::from(height));
@@ -77,7 +81,7 @@ fn decode(bytes: &[u8]) -> Result<Image> {
         return Err(Error::new(Code::Bounds, "image dimensions are too large"));
     }
     if reader.output_color_type().0 == ColorType::Indexed || reader.output_color_type().1 != BitDepth::Eight {
-        return Err(Error::new(Code::Unsupported, "only 8-bit RGB or RGBA PNGs are supported"));
+        return Err(Error::new(Code::Unsupported, "only 8-bit PNGs are supported"));
     }
     let mut raw = vec![0; reader.output_buffer_size()];
     let frame = reader.next_frame(&mut raw).map_err(|_| Error::new(Code::Protocol, "PNG pixels are invalid"))?;
@@ -104,7 +108,7 @@ fn decode(bytes: &[u8]) -> Result<Image> {
     Ok(Image { w: width, h: height, pixels: rgba })
 }
 
-fn encode(w: u32, h: u32, pixels: &[u8]) -> Result<Vec<u8>> {
+pub(crate) fn encode(w: u32, h: u32, pixels: &[u8], max: usize) -> Result<Vec<u8>> {
     let mut out = Vec::new();
     let mut encoder = Encoder::new(&mut out, w, h);
     encoder.set_color(ColorType::Rgba);
@@ -112,8 +116,8 @@ fn encode(w: u32, h: u32, pixels: &[u8]) -> Result<Vec<u8>> {
     let mut writer = encoder.write_header().map_err(|_| Error::new(Code::Io, "PNG encoder failed"))?;
     writer.write_image_data(pixels).map_err(|_| Error::new(Code::Io, "PNG encoder failed"))?;
     drop(writer);
-    if out.len() > crate::api::MAX_FRAME {
-        return Err(Error::new(Code::Bounds, "cropped artifact exceeds 1 MiB"));
+    if out.len() > max {
+        return Err(Error::new(Code::Bounds, "encoded image exceeds its size limit"));
     }
     Ok(out)
 }
@@ -129,8 +133,15 @@ fn gray(image: &Image, x: u32, y: u32) -> u8 {
 mod tests {
     use super::*;
     #[test]
+    fn photos_get_a_clear_limit_not_a_helper_error() {
+        let error = decode(&[0xFF, 0xD8, 0xFF, 0xE0, 0, 16]).err().unwrap();
+        assert_eq!(error.code, Code::Unsupported);
+        assert!(error.plain && error.message.contains("only screen captures"));
+    }
+
+    #[test]
     fn crop_hash_and_diff_are_bounded() {
-        let bytes = encode(2, 2, &[255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255]).unwrap();
+        let bytes = encode(2, 2, &[255, 0, 0, 255, 0, 255, 0, 255, 0, 0, 255, 255, 255, 255, 255, 255], crate::api::MAX_FRAME).unwrap();
         assert_eq!(hash(&bytes).unwrap()["w"], 2);
         assert_eq!(diff(&bytes, &bytes).unwrap()["changed"], 0);
         assert!(crop(&bytes, 0, 0, 1, 1).unwrap().len() > 20);

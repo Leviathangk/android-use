@@ -14,31 +14,19 @@ function prompt(text, heading) {
   return match[1].replaceAll("\r\n", "\n");
 }
 
-test("README and recovery guide keep the agent installer contract aligned", async () => {
+test("README keeps the two-line prompt and the recovery guide keeps the full contract", async () => {
   const [readme, guide] = await Promise.all([
     readFile(join(root, "README.md"), "utf8"),
     readFile(join(root, "docs", "agents", "install.md"), "utf8"),
   ]);
-  const prompts = [
-    prompt(readme, "## Use Android Use in your agent"),
-    prompt(guide, "## Copy-paste setup prompt"),
-  ];
-  for (const required of [
-    "preserve unrelated files",
-    "au setup",
-    "au doctor",
-    "serve --mcp",
-    "android_read command status",
-    "android_read command screen",
-    "command-string tools",
-  ]) {
-    for (const value of prompts) {
-      assert.ok(value.toLowerCase().includes(required.toLowerCase()), `missing shared setup contract: ${required}`);
-    }
+  const short = prompt(readme, "## Use Android Use in your agent");
+  assert.ok(short.length < 200, "the README prompt stays short");
+  for (const required of ["npx -y android-use setup", "android_read", "android_act"]) {
+    assert.ok(short.includes(required), `README prompt is missing: ${required}`);
   }
-  for (const value of prompts) {
-    assert.match(value, /raw ADB/);
-    assert.match(value, /partial or unknown mutation/);
-    assert.doesNotMatch(value, /Austin|Network & internet|Airplane mode/);
+  const full = prompt(guide, "## Copy-paste setup prompt");
+  for (const required of ["preserve unrelated files", "au setup", "au doctor", "serve --mcp", "android_read command status", "android_read command screen", "command-string tools", "raw ADB", "partial or unknown mutation"]) {
+    assert.ok(full.toLowerCase().includes(required.toLowerCase()), `recovery prompt is missing: ${required}`);
   }
+  assert.doesNotMatch(full, /Austin|Network & internet|Airplane mode/);
 });

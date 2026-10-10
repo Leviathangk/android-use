@@ -1,0 +1,531 @@
+//! `au install AGENT` and `au uninstall AGENT`: register the MCP server (and, for agents that
+//! have a skills folder, the skill) with an agent client without touching anything else in its
+//! configuration.
+//!
+//! Rules: one entry named `android-use` is added, updated, or removed and every other entry is
+//! left as it was (key order and indentation included). An entry we did not write is never
+//! replaced without `--force`. Claude Code and Codex are driven through their own CLI, because
+//! their files are rewritten by the running app; the rest are edited in place, atomically, with
+//! the previous file kept as `<file>.au-backup`. A file that is not strict JSON (comments, trailing
+//! commas) is not edited: the snippet to paste is returned instead.
+use crate::{
+    api::{Code, Error, Result},
+    device::atomic,
+};
+use serde_json::{json, Value};
+use std::{
+    env, fs,
+    path::{Path, PathBuf},
+    process::{Command, Stdio},
+};
+
+const NAME: &str = "android-use";
+const SKILL_FILES: [(&str, &str); 4] = [
+    ("SKILL.md", include_str!("../../skills/android-use/SKILL.md")),
+    ("references/protocol.md", include_str!("../../skills/android-use/references/protocol.md")),
+    ("references/safety.md", include_str!("../../skills/android-use/references/safety.md")),
+    ("references/setup.md", include_str!("../../skills/android-use/references/setup.md")),
+];
+
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Client {
+    Claude,
+    Codex,
+    Cursor,
+    Gemini,
+    VsCode,
+    ClaudeDesktop,
+    OpenCode,
+}
+
+pub const ALL: [Client; 7] = [Client::Claude, Client::Codex, Client::Cursor, Client::Gemini, Client::VsCode, Client::ClaudeDesktop, Client::OpenCode];
+
+/// Where a user's configuration lives. Built from the environment; tests point it at a temp dir.
+#[derive(Clone)]
+pub struct Dirs {
+    pub home: PathBuf,
+    pub config: PathBuf,
+    pub app_data: PathBuf,
+}
+
+impl Dirs {
+    pub fn from_env() -> Result<Self> {
+        let home = env::var_os("HOME").or_else(|| env::var_os("USERPROFILE")).map(PathBuf::from).ok_or_else(|| Error::new(Code::Args, "HOME is not set"))?;
+        let config = env::var_os("XDG_CONFIG_HOME").map(PathBuf::from).unwrap_or_else(|| home.join(".config"));
+        let app_data = if cfg!(windows) {
+            env::var_os("APPDATA").map(PathBuf::from).unwrap_or_else(|| home.join("AppData/Roaming"))
+        } else if cfg!(target_os = "macos") {
+            home.join("Library/Application Support")
+        } else {
+            config.clone()
+        };
+        Ok(Self { home, config, app_data })
+    }
+}
+
+#[derive(Clone, Copy, Default)]
+pub struct Options {
+    pub dry_run: bool,
+    pub force: bool,
+}
+
+impl Client {
+    pub fn parse(name: &str) -> Option<Self> {
+        ALL.into_iter().find(|client| client.name() == name.to_ascii_lowercase())
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Claude => "claude",
+            Self::Codex => "codex",
+            Self::Cursor => "cursor",
+            Self::Gemini => "gemini",
+            Self::VsCode => "vscode",
+            Self::ClaudeDesktop => "claude-desktop",
+            Self::OpenCode => "opencode",
+        }
+    }
+
+    /// The agent's own command, when it has one that manages MCP servers.
+    fn cli(self) -> Option<&'static str> {
+        match self {
+            Self::Claude => Some("claude"),
+            Self::Codex => Some("codex"),
+            _ => None,
+        }
+    }
+
+    /// Desktop apps do not inherit the shell's PATH, so they get an absolute command.
+    fn gui(self) -> bool {
+        matches!(self, Self::Cursor | Self::VsCode | Self::ClaudeDesktop)
+    }
+
+    fn config_file(self, d: &Dirs) -> PathBuf {
+        match self {
+            Self::Claude => d.home.join(".claude.json"),
+            Self::Codex => d.home.join(".codex/config.toml"),
+            Self::Cursor => d.home.join(".cursor/mcp.json"),
+            Self::Gemini => d.home.join(".gemini/settings.json"),
+            Self::VsCode => d.app_data.join("Code/User/mcp.json"),
+            Self::ClaudeDesktop => d.app_data.join("Claude/claude_desktop_config.json"),
+            Self::OpenCode => d.config.join("opencode/opencode.json"),
+        }
+    }
+
+    /// The JSON object that holds the servers, as a key path.
+    fn keys(self) -> &'static [&'static str] {
+        match self {
+            Self::VsCode => &["servers"],
+            Self::OpenCode => &["mcp"],
+            _ => &["mcpServers"],
+        }
+    }
+
+    fn skill_dir(self, d: &Dirs) -> Option<PathBuf> {
+        match self {
+            Self::Claude => Some(d.home.join(".claude/skills").join(NAME)),
+            Self::Codex => Some(d.home.join(".codex/skills").join(NAME)),
+            _ => None,
+        }
+    }
+
+    fn entry(self, command: &str) -> Value {
+        match self {
+            Self::VsCode => json!({"type":"stdio","command":command,"args":["serve","--mcp"]}),
+            Self::OpenCode => json!({"type":"local","command":[command,"serve","--mcp"],"enabled":true}),
+            _ => json!({"command":command,"args":["serve","--mcp"]}),
+        }
+    }
+
+    /// Whether this agent looks installed: its command is on PATH or its settings folder exists.
+    pub fn present(self, d: &Dirs) -> bool {
+        let (program, folder) = match self {
+            Self::Claude => ("claude", d.home.join(".claude")),
+            Self::Codex => ("codex", d.home.join(".codex")),
+            Self::Cursor => ("", d.home.join(".cursor")),
+            Self::Gemini => ("gemini", d.home.join(".gemini")),
+            Self::VsCode => ("code", d.app_data.join("Code")),
+            Self::ClaudeDesktop => ("", d.app_data.join("Claude")),
+            Self::OpenCode => ("opencode", d.config.join("opencode")),
+        };
+        which(program).is_some() || folder.is_dir()
+    }
+}
+
+/// One line of an install report.
+#[derive(Debug)]
+pub struct Report {
+    pub client: Client,
+    /// installed, updated, unchanged, removed, absent, manual, or `would_…` for a dry run.
+    pub action: String,
+    pub detail: String,
+}
+
+impl Report {
+    pub fn json(&self) -> Value {
+        json!({"client": self.client.name(), "action": self.action, "detail": self.detail})
+    }
+}
+
+fn which(program: &str) -> Option<PathBuf> {
+    if program.is_empty() {
+        return None;
+    }
+    let names: Vec<String> = if cfg!(windows) { ["exe", "cmd", "bat"].iter().map(|ext| format!("{program}.{ext}")).collect() } else { vec![program.to_owned()] };
+    env::split_paths(&env::var_os("PATH")?).flat_map(|dir| names.iter().map(move |name| dir.join(name))).find(|path| path.is_file())
+}
+
+/// What a config entry should run: `au` for terminal agents when `au` on PATH is this binary, the
+/// PATH location for desktop apps (a stable shim, not a versioned path), else this binary.
+fn command_for(client: Client) -> String {
+    let this = env::current_exe().ok().and_then(|path| fs::canonicalize(path).ok());
+    let on_path = which("au").filter(|found| fs::canonicalize(found).ok() == this);
+    match (on_path, client.gui()) {
+        (Some(found), true) => found.display().to_string(),
+        (Some(_), false) => "au".into(),
+        (None, _) => this.map_or_else(|| "au".into(), |path| path.display().to_string()),
+    }
+}
+
+/// Whether an existing entry was written by au (it runs `serve --mcp`), so replacing it is safe.
+fn ours(entry: &Value) -> bool {
+    let text = entry.to_string();
+    text.contains("serve") && text.contains("--mcp")
+}
+
+fn indent_of(text: &str) -> Vec<u8> {
+    text.lines().find(|line| line.starts_with([' ', '\t'])).map(|line| line.bytes().take_while(|b| *b == b' ' || *b == b'\t').collect()).unwrap_or_else(|| b"  ".to_vec())
+}
+
+fn render(value: &Value, indent: &[u8]) -> Result<String> {
+    use serde::Serialize;
+    let mut out = Vec::new();
+    let mut serializer = serde_json::Serializer::with_formatter(&mut out, serde_json::ser::PrettyFormatter::with_indent(indent));
+    value.serialize(&mut serializer).map_err(|e| Error::new(Code::Io, e.to_string()))?;
+    Ok(String::from_utf8_lossy(&out).into_owned() + "\n")
+}
+
+enum Edit {
+    Done(&'static str),
+    Manual(String),
+}
+
+/// Adds, updates, or removes `android-use` in a JSON config. `entry` of `None` removes.
+fn edit_json(path: &Path, keys: &[&str], entry: Option<&Value>, o: Options) -> Result<Edit> {
+    let text = fs::read_to_string(path).unwrap_or_default();
+    let manual =
+        |entry: &Value| Edit::Manual(format!("{} has comments or is not strict JSON, so it was not edited. Add under {}: \"{NAME}\": {entry}", path.display(), keys.join(".")));
+    let mut root: Value = if text.trim().is_empty() {
+        json!({})
+    } else {
+        match serde_json::from_str(&text) {
+            Ok(value) => value,
+            Err(_) => return Ok(manual(entry.unwrap_or(&Value::Null))),
+        }
+    };
+    let mut node = root.as_object_mut().ok_or_else(|| Error::new(Code::Args, format!("{} is not a JSON object", path.display())))?;
+    for key in keys {
+        if node.get(*key).is_none() {
+            if entry.is_none() {
+                return Ok(Edit::Done("absent"));
+            }
+            node.insert((*key).into(), json!({}));
+        }
+        node = node.get_mut(*key).and_then(Value::as_object_mut).ok_or_else(|| Error::new(Code::Args, format!("{} has a {key} that is not an object", path.display())))?;
+    }
+    let existing = node.get(NAME).cloned();
+    let outcome = match (&existing, entry) {
+        (None, None) => return Ok(Edit::Done("absent")),
+        (Some(found), Some(want)) if found == want => return Ok(Edit::Done("unchanged")),
+        (Some(found), _) if !ours(found) && !o.force => {
+            return Err(Error::new(Code::Args, format!("{} already has an entry named {NAME} that au did not write; pass --force to replace it", path.display())))
+        }
+        (_, Some(want)) => {
+            node.insert(NAME.into(), want.clone());
+            if existing.is_some() {
+                "updated"
+            } else {
+                "installed"
+            }
+        }
+        (_, None) => {
+            node.shift_remove(NAME);
+            "removed"
+        }
+    };
+    if !o.dry_run {
+        let target = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()); // keep a symlinked dotfile a symlink
+        if let Some(parent) = target.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if !text.is_empty() {
+            let _ = fs::copy(&target, format!("{}.au-backup", target.display()));
+        }
+        atomic(&target, render(&root, &indent_of(&text))?.as_bytes())?;
+    }
+    Ok(Edit::Done(outcome))
+}
+
+/// Codex keeps servers in `[mcp_servers.android-use]` tables; replace or append exactly that table.
+fn edit_toml(path: &Path, command: Option<&str>, o: Options) -> Result<Edit> {
+    let text = fs::read_to_string(path).unwrap_or_default();
+    let header = format!("[mcp_servers.{NAME}]");
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.iter().position(|line| line.trim() == header);
+    let end = start.map_or(0, |at| lines[at + 1..].iter().position(|line| line.trim_start().starts_with('[')).map_or(lines.len(), |n| at + 1 + n));
+    let block = command.map(|command| format!("{header}\ncommand = {}\nargs = [\"serve\", \"--mcp\"]\n", json!(command)));
+    let outcome = match (start, &block) {
+        (None, None) => return Ok(Edit::Done("absent")),
+        (Some(at), Some(block)) if lines[at..end].join("\n").trim_end() == block.trim_end() => return Ok(Edit::Done("unchanged")),
+        (Some(at), _) if !ours(&json!(lines[at..end].join(" "))) && !o.force => {
+            return Err(Error::new(Code::Args, format!("{} already has {header} that au did not write; pass --force to replace it", path.display())))
+        }
+        (Some(_), Some(_)) => "updated",
+        (Some(_), None) => "removed",
+        (None, Some(_)) => "installed",
+    };
+    let mut kept: Vec<String> = lines.iter().enumerate().filter(|(i, _)| start.is_none_or(|at| *i < at || *i >= end)).map(|(_, l)| (*l).to_owned()).collect();
+    if let Some(block) = block {
+        if kept.last().is_some_and(|l| !l.trim().is_empty()) {
+            kept.push(String::new());
+        }
+        kept.extend(block.lines().map(str::to_owned));
+    }
+    if !o.dry_run {
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if !text.is_empty() {
+            let _ = fs::copy(path, format!("{}.au-backup", path.display()));
+        }
+        atomic(&fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf()), (kept.join("\n").trim_end().to_owned() + "\n").as_bytes())?;
+    }
+    Ok(Edit::Done(outcome))
+}
+
+/// Runs the agent's own CLI; true when it succeeded.
+fn run_cli(program: &str, args: &[String]) -> bool {
+    which(program).is_some_and(|path| Command::new(path).args(args).stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).status().is_ok_and(|status| status.success()))
+}
+
+fn already_registered(client: Client, d: &Dirs, command: &str) -> Option<bool> {
+    let text = fs::read_to_string(client.config_file(d)).ok()?;
+    match client {
+        Client::Codex => Some(text.contains(&format!("[mcp_servers.{NAME}]")) && text.contains(command)),
+        _ => {
+            let value: Value = serde_json::from_str(&text).ok()?;
+            let servers = value.get("mcpServers")?;
+            Some(servers.get(NAME).is_some_and(|entry| entry == &client.entry(command)))
+        }
+    }
+}
+
+fn write_skill(dir: &Path, o: Options) -> Result<&'static str> {
+    let marker = dir.join(".au-installed");
+    if dir.exists() && !marker.exists() {
+        return Ok("skill_kept");
+    }
+    if !o.dry_run {
+        for (name, body) in SKILL_FILES {
+            let path = dir.join(name);
+            fs::create_dir_all(path.parent().unwrap_or(dir))?;
+            fs::write(path, body)?;
+        }
+        fs::write(&marker, env!("CARGO_PKG_VERSION"))?;
+    }
+    Ok("skill_installed")
+}
+
+fn file_edit(client: Client, d: &Dirs, command: Option<&str>, o: Options) -> Result<Edit> {
+    let path = client.config_file(d);
+    match (client, command) {
+        (Client::Codex, _) => edit_toml(&path, command, o),
+        (_, Some(command)) => edit_json(&path, client.keys(), Some(&client.entry(command)), o),
+        (_, None) => edit_json(&path, client.keys(), None, o),
+    }
+}
+
+/// `claude mcp …` / `codex mcp …` arguments for removing or adding the server.
+fn cli_args(client: Client, command: Option<&str>) -> Vec<String> {
+    let scope: &[&str] = if client == Client::Claude { &["--scope", "user"] } else { &[] };
+    let mut args: Vec<&str> = vec!["mcp", if command.is_some() { "add" } else { "remove" }, NAME];
+    args.extend(scope);
+    if let Some(command) = command {
+        args.extend(["--", command, "serve", "--mcp"]);
+    }
+    args.into_iter().map(str::to_owned).collect()
+}
+
+fn outcome(edit: Edit, o: Options) -> (String, String) {
+    match edit {
+        Edit::Done(action @ ("unchanged" | "absent")) => (action.to_owned(), String::new()),
+        Edit::Done(action) if o.dry_run => (
+            format!(
+                "would_{}",
+                match action {
+                    "installed" => "install",
+                    "updated" => "update",
+                    _ => "remove",
+                }
+            ),
+            String::new(),
+        ),
+        Edit::Done(action) => (action.to_owned(), String::new()),
+        Edit::Manual(snippet) => ("manual".into(), snippet),
+    }
+}
+
+/// Installs into every agent that looks present; the result is the list of reports as JSON.
+pub fn detect_and_install(d: &Dirs, o: Options) -> Value {
+    Value::Array(ALL.into_iter().filter(|client| client.present(d)).map(|client| report(install(client, d, o), client)).collect())
+}
+
+/// A report as JSON; a failure for one agent becomes an `error` row instead of ending the run.
+pub fn report(result: Result<Report>, client: Client) -> Value {
+    result.map(|report| report.json()).unwrap_or_else(|error| json!({"client": client.name(), "action": "error", "detail": error.message}))
+}
+
+pub fn install(client: Client, d: &Dirs, o: Options) -> Result<Report> {
+    let command = command_for(client);
+    let cli = client.cli().filter(|cli| which(cli).is_some());
+    let (action, mut detail) = match cli {
+        Some(_) if already_registered(client, d, &command) == Some(true) => ("unchanged".to_owned(), "via the agent's own CLI".to_owned()),
+        Some(_) if o.dry_run => ("would_install".to_owned(), "via the agent's own CLI".to_owned()),
+        Some(cli) => {
+            // An older entry is replaced: remove it first (nothing to remove is fine), then add.
+            let _ = run_cli(cli, &cli_args(client, None));
+            if !run_cli(cli, &cli_args(client, Some(&command))) {
+                return Err(Error::new(Code::Device, format!("{cli} mcp add failed; run it yourself: {cli} {}", cli_args(client, Some(&command)).join(" "))));
+            }
+            ("installed".to_owned(), "via the agent's own CLI".to_owned())
+        }
+        None => outcome(file_edit(client, d, Some(&command), o)?, o),
+    };
+    if action != "manual" {
+        if let Some(dir) = client.skill_dir(d) {
+            detail = format!("{detail} {}", write_skill(&dir, o)?).trim().to_owned();
+        }
+    }
+    Ok(Report { client, action, detail: format!("{command}; {detail}").trim_end_matches("; ").to_owned() })
+}
+
+pub fn uninstall(client: Client, d: &Dirs, o: Options) -> Result<Report> {
+    let cli = client.cli().filter(|cli| which(cli).is_some());
+    let (action, mut detail) = match cli {
+        Some(cli) if !o.dry_run && run_cli(cli, &cli_args(client, None)) => ("removed".to_owned(), String::new()),
+        _ => outcome(file_edit(client, d, None, o)?, o),
+    };
+    if let Some(dir) = client.skill_dir(d).filter(|dir| dir.join(".au-installed").exists()) {
+        if !o.dry_run {
+            fs::remove_dir_all(&dir)?;
+        }
+        detail = "skill removed".into();
+    }
+    Ok(Report { client, action, detail })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn dirs() -> (Dirs, tempfile::TempDir) {
+        let dir = tempfile::tempdir().unwrap();
+        let d = Dirs { home: dir.path().to_path_buf(), config: dir.path().join(".config"), app_data: dir.path().join("Library/Application Support") };
+        (d, dir)
+    }
+
+    #[test]
+    fn json_clients_get_one_entry_and_keep_everything_else_byte_for_byte() {
+        let (d, _dir) = dirs();
+        let path = Client::Cursor.config_file(&d);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "{\n    \"theme\": \"dark\",\n    \"mcpServers\": {\n        \"zeta\": {\"command\": \"z\"},\n        \"alpha\": {\"command\": \"a\"}\n    }\n}\n")
+            .unwrap();
+        let report = install(Client::Cursor, &d, Options::default()).unwrap();
+        assert_eq!(report.action, "installed");
+        let text = fs::read_to_string(&path).unwrap();
+        let value: Value = serde_json::from_str(&text).unwrap();
+        assert_eq!(value["mcpServers"]["zeta"], json!({"command":"z"}));
+        assert_eq!(value["mcpServers"]["android-use"]["args"], json!(["serve", "--mcp"]));
+        assert!(text.starts_with("{\n    \"theme\""), "indentation and key order kept:\n{text}");
+        assert!(text.find("zeta").unwrap() < text.find("alpha").unwrap() && text.find("alpha").unwrap() < text.find("android-use").unwrap());
+        assert_eq!(install(Client::Cursor, &d, Options::default()).unwrap().action, "unchanged");
+        assert!(Path::new(&format!("{}.au-backup", path.display())).exists());
+        assert_eq!(uninstall(Client::Cursor, &d, Options::default()).unwrap().action, "removed");
+        let after: Value = serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap();
+        assert_eq!(after, json!({"theme":"dark","mcpServers":{"zeta":{"command":"z"},"alpha":{"command":"a"}}}));
+        assert_eq!(uninstall(Client::Cursor, &d, Options::default()).unwrap().action, "absent");
+    }
+
+    #[test]
+    fn a_foreign_entry_is_never_replaced_without_force_and_dry_run_writes_nothing() {
+        let (d, _dir) = dirs();
+        let path = Client::VsCode.config_file(&d);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let theirs = "{\"servers\":{\"android-use\":{\"command\":\"other-tool\"}}}";
+        fs::write(&path, theirs).unwrap();
+        assert!(install(Client::VsCode, &d, Options::default()).unwrap_err().message.contains("--force"));
+        assert_eq!(fs::read_to_string(&path).unwrap(), theirs);
+        let dry = install(Client::VsCode, &d, Options { dry_run: true, force: true }).unwrap();
+        assert_eq!(dry.action, "would_update");
+        assert_eq!(fs::read_to_string(&path).unwrap(), theirs, "dry run changes nothing");
+        assert_eq!(install(Client::VsCode, &d, Options { dry_run: false, force: true }).unwrap().action, "updated");
+        assert_eq!(serde_json::from_str::<Value>(&fs::read_to_string(&path).unwrap()).unwrap()["servers"]["android-use"]["type"], "stdio");
+    }
+
+    #[test]
+    fn a_file_with_comments_is_left_alone_and_the_snippet_is_returned() {
+        let (d, _dir) = dirs();
+        let path = Client::OpenCode.config_file(&d);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(&path, "{\n  // my settings\n  \"theme\": \"x\",\n}\n").unwrap();
+        let error = install(Client::OpenCode, &d, Options::default()).unwrap();
+        assert_eq!(error.action, "manual");
+        assert!(error.detail.contains("not strict JSON") && error.detail.contains("android-use"), "{}", error.detail);
+        assert!(fs::read_to_string(&path).unwrap().contains("// my settings"));
+    }
+
+    #[test]
+    fn toml_edits_touch_only_the_android_use_table() {
+        let (d, _dir) = dirs();
+        let path = Client::Codex.config_file(&d);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let theirs = "model = \"x\"\n\n[mcp_servers.other]\ncommand = \"o\"\n";
+        fs::write(&path, theirs).unwrap();
+        let o = Options::default();
+        assert_eq!(edit_toml(&path, Some("/bin/au"), o).unwrap_done(), "installed");
+        let text = fs::read_to_string(&path).unwrap();
+        assert!(text.starts_with(theirs) && text.contains("[mcp_servers.android-use]\ncommand = \"/bin/au\""), "{text}");
+        assert_eq!(edit_toml(&path, Some("/bin/au"), o).unwrap_done(), "unchanged");
+        assert_eq!(edit_toml(&path, Some("/new/au"), o).unwrap_done(), "updated");
+        assert_eq!(edit_toml(&path, None, o).unwrap_done(), "removed");
+        assert_eq!(fs::read_to_string(&path).unwrap(), theirs);
+    }
+
+    #[test]
+    fn the_skill_is_installed_once_and_a_foreign_skill_folder_is_kept() {
+        let (d, _dir) = dirs();
+        let dir = Client::Claude.skill_dir(&d).unwrap();
+        assert_eq!(write_skill(&dir, Options::default()).unwrap(), "skill_installed");
+        assert!(dir.join("SKILL.md").is_file() && dir.join("references/protocol.md").is_file());
+        let (d2, _dir2) = dirs();
+        let theirs = Client::Codex.skill_dir(&d2).unwrap();
+        fs::create_dir_all(&theirs).unwrap();
+        fs::write(theirs.join("SKILL.md"), "mine").unwrap();
+        assert_eq!(write_skill(&theirs, Options::default()).unwrap(), "skill_kept");
+        assert_eq!(fs::read_to_string(theirs.join("SKILL.md")).unwrap(), "mine");
+    }
+
+    trait Done {
+        fn unwrap_done(self) -> &'static str;
+    }
+
+    impl Done for Result<Edit> {
+        fn unwrap_done(self) -> &'static str {
+            match self.unwrap() {
+                Edit::Done(action) => action,
+                Edit::Manual(snippet) => panic!("{snippet}"),
+            }
+        }
+    }
+}

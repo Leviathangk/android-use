@@ -123,12 +123,14 @@ jobs:
         run: rustup toolchain install 1.94.0 --profile minimal; rustup default 1.94.0
       - name: Verify release version
         run: cargo +1.94.0 xtask version
-      - name: Build the host binary
-        run: cargo +1.94.0 build --profile dist -p au
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: release-helper
           path: helper
+      - name: Build the host binary with the helper embedded
+        shell: bash
+        run: |
+          AU_EMBED_APK="$(ls "$PWD"/helper/*android.apk)" cargo +1.94.0 build --profile dist -p au
       - name: Package Windows archive
         if: matrix.archive == 'zip'
         shell: pwsh

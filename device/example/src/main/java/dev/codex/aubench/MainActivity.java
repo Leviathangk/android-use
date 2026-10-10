@@ -48,12 +48,16 @@ public final class MainActivity extends Activity {
         Button dialog = new Button(this);
         dialog.setText("OPEN BENCHMARK DIALOG");
         dialog.setContentDescription("Benchmark dialog");
-        dialog.setOnClickListener(view -> new AlertDialog.Builder(this)
-                .setTitle("Benchmark confirmation")
-                .setMessage("Deterministic fixture dialog")
-                .setPositiveButton("CONFIRM", (ignored, which) -> state.setText("Dialog confirmed"))
-                .setNegativeButton("CANCEL", null)
-                .show());
+        dialog.setOnClickListener(
+                view ->
+                        new AlertDialog.Builder(this)
+                                .setTitle("Benchmark confirmation")
+                                .setMessage("Deterministic fixture dialog")
+                                .setPositiveButton(
+                                        "CONFIRM",
+                                        (ignored, which) -> state.setText("Dialog confirmed"))
+                                .setNegativeButton("CANCEL", null)
+                                .show());
         content.addView(dialog, matchWrap());
 
         state = new TextView(this);
@@ -78,7 +82,6 @@ public final class MainActivity extends Activity {
 
     private static LinearLayout.LayoutParams matchWrap() {
         return new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT);
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
     }
 }

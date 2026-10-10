@@ -12,9 +12,9 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Converts accessibility evidence into small conceptual rows. It deliberately
- * knows nothing about Android package names, resource identifiers, or app
- * labels; those are implementation evidence, never semantic rules.
+ * Converts accessibility evidence into small conceptual rows. It deliberately knows nothing about
+ * Android package names, resource identifiers, or app labels; those are implementation evidence,
+ * never semantic rules.
  */
 final class SemanticCompiler {
     private SemanticCompiler() {}
@@ -22,14 +22,104 @@ final class SemanticCompiler {
     static final class Item {
         final long id, parent;
         final String label, hint, role;
-        final boolean clickable, enabled, checkable, checked, editable, password, hasText, scrollable, selected, heading, button, link, radio, checkbox, slider, visible, modal;
+        final boolean clickable,
+                enabled,
+                checkable,
+                checked,
+                editable,
+                password,
+                hasText,
+                scrollable,
+                selected,
+                heading,
+                button,
+                link,
+                radio,
+                checkbox,
+                slider,
+                visible,
+                modal;
         final int left, top, right, bottom;
 
-        Item(long id, long parent, String label, String hint, String role, boolean clickable, boolean enabled, boolean checkable, boolean checked, boolean editable, boolean password, boolean hasText, boolean scrollable, boolean selected, boolean heading, boolean button, boolean link, boolean radio, boolean checkbox, boolean slider, boolean visible, boolean modal) {
-            this(id, parent, label, hint, role, clickable, enabled, checkable, checked, editable, password, hasText, scrollable, selected, heading, button, link, radio, checkbox, slider, visible, modal, 0, 0, 0, 0);
+        Item(
+                long id,
+                long parent,
+                String label,
+                String hint,
+                String role,
+                boolean clickable,
+                boolean enabled,
+                boolean checkable,
+                boolean checked,
+                boolean editable,
+                boolean password,
+                boolean hasText,
+                boolean scrollable,
+                boolean selected,
+                boolean heading,
+                boolean button,
+                boolean link,
+                boolean radio,
+                boolean checkbox,
+                boolean slider,
+                boolean visible,
+                boolean modal) {
+            this(
+                    id,
+                    parent,
+                    label,
+                    hint,
+                    role,
+                    clickable,
+                    enabled,
+                    checkable,
+                    checked,
+                    editable,
+                    password,
+                    hasText,
+                    scrollable,
+                    selected,
+                    heading,
+                    button,
+                    link,
+                    radio,
+                    checkbox,
+                    slider,
+                    visible,
+                    modal,
+                    0,
+                    0,
+                    0,
+                    0);
         }
 
-        Item(long id, long parent, String label, String hint, String role, boolean clickable, boolean enabled, boolean checkable, boolean checked, boolean editable, boolean password, boolean hasText, boolean scrollable, boolean selected, boolean heading, boolean button, boolean link, boolean radio, boolean checkbox, boolean slider, boolean visible, boolean modal, int left, int top, int right, int bottom) {
+        Item(
+                long id,
+                long parent,
+                String label,
+                String hint,
+                String role,
+                boolean clickable,
+                boolean enabled,
+                boolean checkable,
+                boolean checked,
+                boolean editable,
+                boolean password,
+                boolean hasText,
+                boolean scrollable,
+                boolean selected,
+                boolean heading,
+                boolean button,
+                boolean link,
+                boolean radio,
+                boolean checkbox,
+                boolean slider,
+                boolean visible,
+                boolean modal,
+                int left,
+                int top,
+                int right,
+                int bottom) {
             this.id = id;
             this.parent = parent;
             this.label = clean(label);
@@ -83,7 +173,13 @@ final class SemanticCompiler {
         final String label, value, kind, state;
         final boolean enabled, selected;
 
-        Row(String label, String value, String kind, String state, boolean enabled, boolean selected) {
+        Row(
+                String label,
+                String value,
+                String kind,
+                String state,
+                boolean enabled,
+                boolean selected) {
             this.label = label;
             this.value = value;
             this.kind = kind;
@@ -112,11 +208,15 @@ final class SemanticCompiler {
 
         List<Row> rows = new ArrayList<>();
         Item heading = firstHeading(visible);
-        if (heading != null) rows.add(new Row(heading.label, "", "heading", "", heading.enabled, heading.selected));
+        if (heading != null)
+            rows.add(new Row(heading.label, "", "heading", "", heading.enabled, heading.selected));
 
         Set<Long> consumed = new HashSet<>();
         List<Owned> owned = spatialRows(visible, heading, consumed);
-        Collections.sort(owned, Comparator.comparingInt((Owned value) -> top(value.owner)).thenComparingInt(value -> value.owner.left));
+        Collections.sort(
+                owned,
+                Comparator.comparingInt((Owned value) -> top(value.owner))
+                        .thenComparingInt(value -> value.owner.left));
         for (Owned row : owned) rows.add(row(row));
 
         for (List<Item> group : groups.values()) {
@@ -132,7 +232,8 @@ final class SemanticCompiler {
                 }
             }
             Item control = bestControl(controls);
-            if (labels.isEmpty() && control != null && !control.label.isEmpty()) labels.add(control);
+            if (labels.isEmpty() && control != null && !control.label.isEmpty())
+                labels.add(control);
             if (labels.isEmpty()) continue;
 
             if (controls.size() > 1) {
@@ -140,7 +241,14 @@ final class SemanticCompiler {
                 for (Item item : controls) if (item.label.isEmpty()) independentlyLabeled = false;
                 if (independentlyLabeled) {
                     for (Item item : controls) {
-                        rows.add(new Row(item.label, "", kind(item, item), state(item, item.selected), item.enabled, item.selected));
+                        rows.add(
+                                new Row(
+                                        item.label,
+                                        "",
+                                        kind(item, item),
+                                        state(item, item.selected),
+                                        item.enabled,
+                                        item.selected));
                     }
                     continue;
                 }
@@ -172,11 +280,10 @@ final class SemanticCompiler {
     }
 
     /**
-     * Row containers and their text children do not always share one immediate
-     * parent. Use the geometry as a second source of structure, assigning each
-     * readable node to the smallest bounded clickable owner that contains it.
-     * This is deliberately app-independent: it works for list rows, cards,
-     * dialogs, and custom views without knowing their resource names.
+     * Row containers and their text children do not always share one immediate parent. Use the
+     * geometry as a second source of structure, assigning each readable node to the smallest
+     * bounded clickable owner that contains it. This is deliberately app-independent: it works for
+     * list rows, cards, dialogs, and custom views without knowing their resource names.
      */
     private static List<Owned> spatialRows(List<Item> items, Item heading, Set<Long> consumed) {
         List<Item> owners = new ArrayList<>();
@@ -189,11 +296,14 @@ final class SemanticCompiler {
             maxRight = Math.max(maxRight, item.right);
             maxBottom = Math.max(maxBottom, item.bottom);
         }
-        long canvasArea = maxRight > minLeft && maxBottom > minTop
-            ? (long) (maxRight - minLeft) * (maxBottom - minTop) : 0L;
+        long canvasArea =
+                maxRight > minLeft && maxBottom > minTop
+                        ? (long) (maxRight - minLeft) * (maxBottom - minTop)
+                        : 0L;
         for (Item item : items) {
             if (!item.visible || !item.hasBounds() || !item.clickable || item.scrollable) continue;
-            if (canvasArea > 0 && item.area() * 100L >= canvasArea * 85L && item.label.isEmpty()) continue;
+            if (canvasArea > 0 && item.area() * 100L >= canvasArea * 85L && item.label.isEmpty())
+                continue;
             owners.add(item);
         }
         if (owners.isEmpty()) return new ArrayList<>();
@@ -234,7 +344,8 @@ final class SemanticCompiler {
             if (item == owner) return owner;
             if (!item.hasBounds() || !owner.hasBounds()) continue;
             int cx = item.centerX(), cy = item.centerY();
-            if (cx < owner.left || cx > owner.right || cy < owner.top || cy > owner.bottom) continue;
+            if (cx < owner.left || cx > owner.right || cy < owner.top || cy > owner.bottom)
+                continue;
             long area = owner.area();
             if (best == null || area < bestArea) {
                 best = owner;
@@ -277,12 +388,16 @@ final class SemanticCompiler {
 
     private static Row row(Owned owned) {
         List<Item> members = new ArrayList<>(owned.members);
-        Collections.sort(members, Comparator.comparingInt(SemanticCompiler::top).thenComparingInt(value -> value.left));
+        Collections.sort(
+                members,
+                Comparator.comparingInt(SemanticCompiler::top)
+                        .thenComparingInt(value -> value.left));
         List<Item> controls = new ArrayList<>();
         for (Item item : members) if (item.interactive() && !item.scrollable) controls.add(item);
         Item control = bestControl(controls);
         List<Text> texts = meaningfulTexts(members);
-        if (texts.isEmpty() && control != null && !control.label.isEmpty()) texts.add(new Text(control.label, control));
+        if (texts.isEmpty() && control != null && !control.label.isEmpty())
+            texts.add(new Text(control.label, control));
         if (texts.isEmpty()) return new Row("", "", "", "", true, false);
 
         String label = texts.get(0).value;
@@ -296,19 +411,28 @@ final class SemanticCompiler {
         Item labelEvidence = texts.get(0).evidence;
         boolean enabled = control == null ? labelEvidence.enabled : control.enabled;
         boolean selected = control != null && control.selected;
-        return new Row(label, value, kind(control, labelEvidence), state(control, selected), enabled, selected);
+        return new Row(
+                label,
+                value,
+                kind(control, labelEvidence),
+                state(control, selected),
+                enabled,
+                selected);
     }
 
     private static List<Text> meaningfulTexts(List<Item> members) {
         List<Item> labels = new ArrayList<>();
-        for (Item item : members) if (!item.label.isEmpty() && !decorativeLabel(item, members)) labels.add(item);
+        for (Item item : members)
+            if (!item.label.isEmpty() && !decorativeLabel(item, members)) labels.add(item);
         if (labels.isEmpty()) for (Item item : members) if (!item.label.isEmpty()) labels.add(item);
         List<Text> primary = new ArrayList<>(), residual = new ArrayList<>();
         for (Item item : labels) {
             if (redundantComposite(item, labels)) {
                 for (String part : item.label.split(",")) {
                     String clean = clean(part);
-                    if (!clean.isEmpty() && !matchesOther(clean, item, labels) && !containsText(residual, clean)) residual.add(new Text(clean, item));
+                    if (!clean.isEmpty()
+                            && !matchesOther(clean, item, labels)
+                            && !containsText(residual, clean)) residual.add(new Text(clean, item));
                 }
             } else if (!containsText(primary, item.label)) {
                 primary.add(new Text(item.label, item));
@@ -341,14 +465,16 @@ final class SemanticCompiler {
     private static boolean matchesOther(String value, Item item, List<Item> labels) {
         String normalized = value.toLowerCase(Locale.ROOT);
         for (Item other : labels) {
-            if (other != item && normalized.equals(other.label.toLowerCase(Locale.ROOT))) return true;
+            if (other != item && normalized.equals(other.label.toLowerCase(Locale.ROOT)))
+                return true;
         }
         return false;
     }
 
     private static boolean containsText(List<Text> texts, String value) {
         String normalized = value.toLowerCase(Locale.ROOT);
-        for (Text text : texts) if (text.value.toLowerCase(Locale.ROOT).equals(normalized)) return true;
+        for (Text text : texts)
+            if (text.value.toLowerCase(Locale.ROOT).equals(normalized)) return true;
         return false;
     }
 
@@ -394,7 +520,8 @@ final class SemanticCompiler {
 
     private static String state(Item control, boolean selected) {
         if (control == null) return selected ? "selected" : "";
-        if (control.radio || control.checkbox || control.checkable) return control.checked ? "checked" : "unchecked";
+        if (control.radio || control.checkbox || control.checkable)
+            return control.checked ? "checked" : "unchecked";
         return selected ? "selected" : "";
     }
 

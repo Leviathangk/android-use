@@ -30,7 +30,9 @@ final class Projection {
         synchronized (LOCK) {
             if (data == null) return null;
             MediaProjectionManager manager = context.getSystemService(MediaProjectionManager.class);
-            return manager == null ? null : manager.getMediaProjection(resultCode, new Intent(data));
+            return manager == null
+                    ? null
+                    : manager.getMediaProjection(resultCode, new Intent(data));
         }
     }
 

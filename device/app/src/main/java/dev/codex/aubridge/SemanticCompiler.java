@@ -172,6 +172,7 @@ final class SemanticCompiler {
     static final class Row {
         final String label, value, kind, state;
         final boolean enabled, selected;
+        int top = Integer.MAX_VALUE, left;
 
         Row(
                 String label,
@@ -186,6 +187,12 @@ final class SemanticCompiler {
             this.state = state;
             this.enabled = enabled;
             this.selected = selected;
+        }
+
+        Row at(Item item) {
+            top = SemanticCompiler.top(item);
+            left = item.left;
+            return this;
         }
     }
 
@@ -212,12 +219,7 @@ final class SemanticCompiler {
             rows.add(new Row(heading.label, "", "heading", "", heading.enabled, heading.selected));
 
         Set<Long> consumed = new HashSet<>();
-        List<Owned> owned = spatialRows(visible, heading, consumed);
-        Collections.sort(
-                owned,
-                Comparator.comparingInt((Owned value) -> top(value.owner))
-                        .thenComparingInt(value -> value.owner.left));
-        for (Owned row : owned) rows.add(row(row));
+        for (Owned row : spatialRows(visible, heading, consumed)) rows.add(row(row).at(row.owner));
 
         for (List<Item> group : groups.values()) {
             List<Item> labels = new ArrayList<>();
@@ -243,12 +245,13 @@ final class SemanticCompiler {
                     for (Item item : controls) {
                         rows.add(
                                 new Row(
-                                        item.label,
-                                        "",
-                                        kind(item, item),
-                                        state(item, item.selected),
-                                        item.enabled,
-                                        item.selected));
+                                                item.label,
+                                                "",
+                                                kind(item, item),
+                                                state(item, item.selected),
+                                                item.enabled,
+                                                item.selected)
+                                        .at(item));
                     }
                     continue;
                 }
@@ -274,8 +277,13 @@ final class SemanticCompiler {
             boolean selected = control != null && control.selected;
             String kind = kind(control, labels.get(0));
             String state = state(control, selected);
-            rows.add(new Row(label, value, kind, state, enabled, selected));
+            Item at = control != null && control.editable ? control : labels.get(0);
+            rows.add(new Row(label, value, kind, state, enabled, selected).at(at));
         }
+        // The host numbers duplicate labels in list order and the resolver numbers them top to
+        // bottom, then left to right, so every row after the heading is listed in that order.
+        rows.subList(heading == null ? 0 : 1, rows.size())
+                .sort(Comparator.comparingInt((Row r) -> r.top).thenComparingInt(r -> r.left));
         return rows;
     }
 

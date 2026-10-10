@@ -4,10 +4,12 @@ import android.accessibilityservice.GestureDescription;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.os.SystemClock;
+import android.provider.Settings;
 import android.view.accessibility.AccessibilityNodeInfo;
 
 import org.json.JSONArray;
@@ -50,19 +52,7 @@ final class Vm {
         try {
             result = execute(q);
         } catch (Exception e) {
-            result =
-                    new R(
-                            e instanceof Stale
-                                    ? 1
-                                    : e instanceof Timeout
-                                            ? 2
-                                            : e instanceof Bridge.Limit
-                                                    ? 6
-                                                    : e instanceof Permission ? 10 : 5,
-                            gen(),
-                            0,
-                            0,
-                            null);
+            result = new R(failure(e), gen(), 0, 0, null);
         } finally {
             synchronized (done) {
                 running.remove(id);
@@ -113,7 +103,12 @@ final class Vm {
                         ok = p.apply(context, ui, capture, end);
                         guarded = true;
                     }
-                } else ok = p.apply(context, ui, capture, end);
+                } else {
+                    // The generation moves on legitimate chains (type, then tap "Send"), so each
+                    // later targeted change re-validates its own node instead (see current()).
+                    if (p.mutates && p.node != null && !p.current(ui)) throw new Stale();
+                    ok = p.apply(context, ui, capture, end);
+                }
                 if (!ok) throw new Fail(i, false);
                 if (p.mutates) committed++;
                 if (p.artifact != null) artifact = p.artifact;
@@ -132,6 +127,13 @@ final class Vm {
             for (P p : plan) p.close();
         }
         return new R(0, gen(), committed, -1, artifact);
+    }
+
+    private static int failure(Exception e) {
+        if (e instanceof Stale) return 1;
+        if (e instanceof Timeout) return 2;
+        if (e instanceof Bridge.Limit) return 6;
+        return e instanceof Permission ? 10 : 5;
     }
 
     private static long gen() {
@@ -176,6 +178,7 @@ final class Vm {
         final Pred pred;
         final JSONArray points;
         final boolean mutates;
+        final String seen;
         String artifact;
 
         P(
@@ -193,6 +196,35 @@ final class Vm {
             this.pred = pred;
             this.points = points;
             this.mutates = mutates;
+            this.seen = node == null ? null : print(node);
+        }
+
+        /**
+         * Whether the node is still what the plan resolved: in the active window (a dialog that
+         * opened over it fails), visible, enabled, with the same bounds and label.
+         */
+        boolean current(Ui ui) {
+            AccessibilityNodeInfo root = ui.getRootInActiveWindow();
+            if (root == null) return false;
+            boolean active = root.getWindowId() == node.getWindowId();
+            root.recycle();
+            return active
+                    && node.refresh()
+                    && node.isVisibleToUser()
+                    && node.isEnabled()
+                    && print(node).equals(seen);
+        }
+
+        /** Bounds, identity and label; a text field's own text is left out so typing keeps it. */
+        private static String print(AccessibilityNodeInfo n) {
+            Rect r = new Rect();
+            n.getBoundsInScreen(r);
+            return r.toShortString()
+                    + n.getViewIdResourceName()
+                    + "|"
+                    + (n.isEditable() ? "" : n.getText())
+                    + "|"
+                    + n.getContentDescription();
         }
 
         static P parse(JSONArray a, Ui.Scene s, Context context, Capture capture) throws Exception {
@@ -211,13 +243,11 @@ final class Vm {
                     return new P(n, copy(s, a.getInt(1)), t, 0, null, null, true);
                 case "tap_point":
                     exact(a, 3);
-                    return point(n, a.getInt(1), a.getInt(2));
+                    return swipe(n, a.getInt(1), a.getInt(2), a.getInt(1), a.getInt(2), 1);
                 case "swipe":
                     exact(a, 6);
-                    int gestureDuration = a.getInt(5);
-                    if (gestureDuration < 0 || gestureDuration > 30_000) throw new Bridge.Limit();
                     return swipe(
-                            n, a.getInt(1), a.getInt(2), a.getInt(3), a.getInt(4), gestureDuration);
+                            n, a.getInt(1), a.getInt(2), a.getInt(3), a.getInt(4), a.getInt(5));
                 case "scroll":
                     exact(a, 3);
                     String d = a.getString(2);
@@ -240,13 +270,8 @@ final class Vm {
                     if (pts.length() < 2 || pts.length() > 16) throw new Bridge.Limit();
                     for (int i = 0; i < pts.length(); i++) {
                         JSONArray p = pts.getJSONArray(i);
-                        if (p.length() != 3
-                                || p.getInt(0) < 0
-                                || p.getInt(0) > 65_535
-                                || p.getInt(1) < 0
-                                || p.getInt(1) > 65_535
-                                || p.getInt(2) < 0
-                                || p.getInt(2) > 30_000) throw new Bridge.Limit();
+                        if (p.length() != 3) throw new Bridge.Limit();
+                        xy(p.getInt(0), p.getInt(1), p.getInt(2));
                     }
                     return new P(n, null, null, 0, null, pts, true);
                 case "wait":
@@ -314,30 +339,17 @@ final class Vm {
             return new P(n, copy(s, a.optInt(1, -1)), null, 0, null, null, mut);
         }
 
-        private static P point(String n, int x, int y) throws Bridge.Limit {
-            if (x < 0 || y < 0 || x > 65_535 || y > 65_535) throw new Bridge.Limit();
-            JSONArray p =
-                    new JSONArray()
-                            .put(new JSONArray().put(x).put(y).put(1))
-                            .put(new JSONArray().put(x).put(y).put(1));
+        private static P swipe(String n, int x1, int y1, int x2, int y2, int duration)
+                throws Bridge.Limit {
+            JSONArray p = new JSONArray().put(xy(x1, y1, 1)).put(xy(x2, y2, duration));
             return new P(n, null, null, 0, null, p, true);
         }
 
-        private static P swipe(String n, int x1, int y1, int x2, int y2, int duration)
-                throws Bridge.Limit {
-            if (x1 < 0
-                    || y1 < 0
-                    || x2 < 0
-                    || y2 < 0
-                    || x1 > 65_535
-                    || y1 > 65_535
-                    || x2 > 65_535
-                    || y2 > 65_535) throw new Bridge.Limit();
-            JSONArray p =
-                    new JSONArray()
-                            .put(new JSONArray().put(x1).put(y1).put(1))
-                            .put(new JSONArray().put(x2).put(y2).put(duration));
-            return new P(n, null, null, 0, null, p, true);
+        /** One bounded gesture point: screen coordinates and a time in milliseconds. */
+        private static JSONArray xy(int x, int y, int ms) throws Bridge.Limit {
+            if (x < 0 || y < 0 || x > 65_535 || y > 65_535 || ms < 0 || ms > 30_000)
+                throw new Bridge.Limit();
+            return new JSONArray().put(x).put(y).put(ms);
         }
 
         boolean apply(Context context, Ui ui, Capture capture, long end) throws Exception {
@@ -352,17 +364,11 @@ final class Vm {
                             AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text);
                     return node.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, b);
                 case "scroll":
-                    // Use the explicit direction when the view offers it. A view that offers
-                    // other directions but not this one fails rather than scrolling the wrong
-                    // axis; only views that advertise no directions use forward/backward.
+                    // Use the explicit direction when the view offers it, else forward/backward
+                    // only when that pages along the requested axis.
                     int directional = Ui.scrollAction(text);
                     if (Ui.supports(node, directional)) return node.performAction(directional);
-                    // Horizontal requests and views that advertise other directions never fall
-                    // back:
-                    // paging forward or backward would scroll the wrong axis and report success.
-                    if (Ui.advertisesDirections(node)
-                            || "left".equals(text)
-                            || "right".equals(text)) return false;
+                    if (!Ui.pages(node, text)) return false;
                     return node.performAction(
                             arg < 0
                                     ? AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD
@@ -376,12 +382,12 @@ final class Vm {
                 case "wait":
                     long until = Math.min(end, SystemClock.elapsedRealtime() + arg);
                     do {
-                        if (pred.test(ui)) return true;
+                        if (pred.test(ui.snapshot())) return true;
                         Thread.sleep(50);
                     } while (SystemClock.elapsedRealtime() < until);
                     return false;
                 case "assert":
-                    return pred.test(ui);
+                    return pred.test(ui.snapshot());
                 case "launch":
                     Intent i = context.getPackageManager().getLaunchIntentForPackage(text);
                     if (i == null) return false;
@@ -502,7 +508,7 @@ final class Vm {
             String k = a.getString(0);
             switch (k) {
                 case "text":
-                    return new Pred(k, bounded(a.getString(1), 1024), null, 0);
+                    return new Pred(k, needle(a.getString(1)), null, 0);
                 case "generation_after":
                     return new Pred(k, null, null, a.getLong(1));
                 case "exists":
@@ -516,14 +522,19 @@ final class Vm {
                     JSONArray m = (JSONArray) v;
                     if (m.length() != 2 || !"label".equals(m.getString(0)))
                         throw new Bridge.Limit();
-                    return new Pred(k, bounded(m.getString(1), 1024), null, 0);
+                    return new Pred(k, needle(m.getString(1)), null, 0);
                 default:
                     throw new Unsupported();
             }
         }
 
-        boolean test(Ui ui) {
-            Ui.Scene s = ui.snapshot();
+        /** A label that normalizes to nothing ("[]", "…") names nothing, so it is refused. */
+        private static String needle(String label) throws Bridge.Limit {
+            if (Targets.normalize(label).isEmpty()) throw new Bridge.Limit();
+            return bounded(label, 1024);
+        }
+
+        boolean test(Ui.Scene s) {
             boolean v;
             if ("text".equals(kind)) return s.label(label);
             if ("generation_after".equals(kind)) return s.generation > generation;
@@ -532,7 +543,11 @@ final class Vm {
                 // changed, the same index can name a different node, so the check fails closed.
                 if (s.generation != generation) return false;
                 v = s.ref(ref) != null;
-            } else v = s.named(label);
+            } else {
+                // Absence from a scene cut off at the walk's caps is unknown, so "missing" fails.
+                if (s.truncated && !"exists".equals(kind)) return false;
+                v = s.named(label);
+            }
             return "exists".equals(kind) ? v : !v;
         }
     }
@@ -568,43 +583,22 @@ final class Vm {
                 && !value.matches(".*[\\p{Cntrl}\\\"].*");
     }
 
+    private static final String[][] SETTINGS = {
+        {"accessibility", Settings.ACTION_ACCESSIBILITY_SETTINGS},
+        {"wifi", Settings.ACTION_WIFI_SETTINGS},
+        {"bluetooth", Settings.ACTION_BLUETOOTH_SETTINGS},
+        {"display", Settings.ACTION_DISPLAY_SETTINGS},
+        {"sound", Settings.ACTION_SOUND_SETTINGS},
+        {"notifications", "android.settings.NOTIFICATION_SETTINGS"},
+        {"apps", Settings.ACTION_APPLICATION_SETTINGS},
+        {"battery", Settings.ACTION_BATTERY_SAVER_SETTINGS},
+        {"date and time", Settings.ACTION_DATE_SETTINGS},
+        {"developer options", Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS}
+    };
+
     private static Intent settingIntent(String value) {
         String v = value.toLowerCase(java.util.Locale.ROOT).trim();
-        String action;
-        switch (v) {
-            case "accessibility":
-                action = android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS;
-                break;
-            case "wifi":
-                action = android.provider.Settings.ACTION_WIFI_SETTINGS;
-                break;
-            case "bluetooth":
-                action = android.provider.Settings.ACTION_BLUETOOTH_SETTINGS;
-                break;
-            case "display":
-                action = android.provider.Settings.ACTION_DISPLAY_SETTINGS;
-                break;
-            case "sound":
-                action = android.provider.Settings.ACTION_SOUND_SETTINGS;
-                break;
-            case "notifications":
-                action = "android.settings.NOTIFICATION_SETTINGS";
-                break;
-            case "apps":
-                action = android.provider.Settings.ACTION_APPLICATION_SETTINGS;
-                break;
-            case "battery":
-                action = android.provider.Settings.ACTION_BATTERY_SAVER_SETTINGS;
-                break;
-            case "date and time":
-                action = android.provider.Settings.ACTION_DATE_SETTINGS;
-                break;
-            case "developer options":
-                action = android.provider.Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS;
-                break;
-            default:
-                return null;
-        }
-        return new Intent(action);
+        for (String[] setting : SETTINGS) if (setting[0].equals(v)) return new Intent(setting[1]);
+        return null;
     }
 }

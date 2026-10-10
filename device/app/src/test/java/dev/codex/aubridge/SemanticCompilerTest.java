@@ -427,4 +427,18 @@ public final class SemanticCompilerTest {
                         boundedText(2101, 2100, "Node-7", 40, 126, 220, 150));
         assertEquals(result, rows(SemanticCompiler.compile(mutated)));
     }
+
+    @Test
+    public void groupedAndSpatialRowsListTopToBottomLikeTheResolver() {
+        List<SemanticCompiler.Row> rows =
+                SemanticCompiler.compile(
+                        Arrays.asList(
+                                heading(1, 0, "Cart"),
+                                boundedOwner(10, 100, "Remove", 0, 900, 900, 960),
+                                boundedText(20, 200, "Remove", 0, 300, 200, 340)));
+        assertEquals(3, rows.size());
+        assertEquals("Remove", rows.get(1).label);
+        assertEquals(300, rows.get(1).top);
+        assertEquals(900, rows.get(2).top);
+    }
 }

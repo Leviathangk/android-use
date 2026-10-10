@@ -21,6 +21,8 @@ pub(crate) struct SemanticRow {
     pub state: String,
     pub enabled: bool,
     pub selected: bool,
+    /// Position in the helper's full listing: what `e12` means. Only unlabeled rows print it.
+    pub handle: Option<u16>,
 }
 
 pub(crate) fn parse_semantic_rows(value: &Value) -> Result<Vec<SemanticRow>> {
@@ -30,14 +32,23 @@ pub(crate) fn parse_semantic_rows(value: &Value) -> Result<Vec<SemanticRow>> {
     }
     rows.iter()
         .map(|row| {
-            let row = row.as_array().filter(|row| row.len() == 6).ok_or_else(|| Error::new(Code::Protocol, "semantic screen row must contain six values"))?;
+            let row =
+                row.as_array().filter(|row| (6..=7).contains(&row.len())).ok_or_else(|| Error::new(Code::Protocol, "semantic screen row must contain six or seven values"))?;
             let text = |index: usize| match row[index].as_str() {
                 Some(value) if value.len() <= 512 => Ok(value.to_owned()),
                 Some(_) => Err(Error::new(Code::Bounds, "semantic screen text is too long")),
                 None => Err(Error::new(Code::Protocol, "semantic screen text must be a string")),
             };
             let flag = |index: usize| row[index].as_bool().ok_or_else(|| Error::new(Code::Protocol, "semantic screen flag must be boolean"));
-            Ok(SemanticRow { label: text(0)?, value: text(1)?, kind: text(2)?, state: text(3)?, enabled: flag(4)?, selected: flag(5)? })
+            Ok(SemanticRow {
+                label: text(0)?,
+                value: text(1)?,
+                kind: text(2)?,
+                state: text(3)?,
+                enabled: flag(4)?,
+                selected: flag(5)?,
+                handle: row.get(6).and_then(Value::as_u64).and_then(|n| u16::try_from(n).ok()),
+            })
         })
         .collect()
 }
@@ -127,7 +138,7 @@ fn short_value(value: &str) -> bool {
 /// control carries the same words (the resolver prefers the control), so a listed number is always
 /// one the resolver accepts.
 fn duplicate_numbers(rows: &[SemanticRow]) -> Vec<Option<usize>> {
-    let counted = |row: &SemanticRow, controls_exist: bool| row.kind != "heading" && (!controls_exist || !row.kind.is_empty());
+    let counted = |row: &SemanticRow, controls_exist: bool| row.kind != "heading" && !row.label.is_empty() && (!controls_exist || !row.kind.is_empty());
     let mut controls: HashMap<String, bool> = HashMap::new();
     for row in rows.iter().filter(|row| !row.kind.is_empty() && row.kind != "heading") {
         controls.insert(normalized(&row.label), true);
@@ -235,7 +246,11 @@ pub(crate) fn format_semantic_delta(rows: &[SemanticRow]) -> String {
 
 /// One row as an agent reads it. The label is always verbatim, so it can be quoted back exactly.
 pub(crate) fn semantic_line(row: &SemanticRow, number: Option<usize>, full: bool) -> String {
-    let label = display_n(&row.label, 96);
+    let mut label = display_n(&row.label, 96);
+    // An icon-only control has no words to quote; its handle is the name.
+    if label.is_empty() && !row.kind.is_empty() {
+        label = row.handle.map(|handle| format!("e{handle}")).unwrap_or_default();
+    }
     if label.is_empty() || row.kind == "heading" {
         return label;
     }
@@ -667,14 +682,14 @@ mod tests {
     use serde_json::json;
 
     fn row(label: &str, kind: &str, value: &str, state: &str) -> SemanticRow {
-        SemanticRow { label: label.into(), value: value.into(), kind: kind.into(), state: state.into(), enabled: true, selected: false }
+        SemanticRow { label: label.into(), value: value.into(), kind: kind.into(), state: state.into(), enabled: true, selected: false, handle: None }
     }
 
     #[test]
     fn model_text_is_plain_and_bounded() {
         let actions = vec![
-            Action::Android(AndroidAction::Type { text: "Sample text".into(), target: Target { label: "Name".into(), ordinal: None } }),
-            Action::Android(AndroidAction::Tap(Target { label: "Save".into(), ordinal: None })),
+            Action::Android(AndroidAction::Type { text: "Sample text".into(), target: Target { label: "Name".into(), ordinal: None, handle: None } }),
+            Action::Android(AndroidAction::Tap(Target { label: "Save".into(), ordinal: None, handle: None })),
             Action::Android(AndroidAction::VerifyText("Submitted".into())),
         ];
         assert_eq!(success_text(&actions), "Done. Typed Sample text in Name, tapped Save, and verified that Submitted appeared.");
@@ -755,7 +770,8 @@ mod tests {
 
     #[test]
     fn failures_name_the_step_and_whether_anything_changed() {
-        let actions = vec![Action::Android(AndroidAction::Tap(Target { label: "Save".into(), ordinal: None })), Action::Android(AndroidAction::VerifyText("Saved".into()))];
+        let actions =
+            vec![Action::Android(AndroidAction::Tap(Target { label: "Save".into(), ordinal: None, handle: None })), Action::Android(AndroidAction::VerifyText("Saved".into()))];
         let failed = |m: u8, at: u8, e: &str| Receipt { id: "x".into(), ok: 0, g: 1, m, at: Some(at), e: Some(e.into()), partial: None, next: None, artifact: None };
         assert!(failure_text(&failed(1, 1, "partial"), &actions).contains("step 2 of 2 (verify text \"Saved\" exists)"));
         assert_eq!(receipt_code(&failed(1, 1, "partial")), Code::Partial);

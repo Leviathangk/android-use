@@ -73,6 +73,10 @@ mod flows {
                 "observe" if q[2].as_str() == Some(generation.to_string().as_str()) => json!([seq, 0, generation]),
                 "observe" => json!([seq, 0, generation, "fixture", names.iter().enumerate().map(|(i, l)| json!([i, l, 98, 3])).collect::<Vec<_>>()]),
                 "semantic" => json!([seq, 0, names.iter().map(|l| json!([l, "", "button", "", true, false])).collect::<Vec<_>>()]),
+                "resolve" if q[2]["handle"].as_i64().is_some_and(|handle| handle >= 0) => {
+                    let handle = q[2]["handle"].as_u64().unwrap() as usize;
+                    json!([seq, 0, {"r": (handle < names.len()).then_some(handle).into_iter().collect::<Vec<_>>(), "t": 0, "l": []}])
+                }
                 "resolve" => {
                     let wanted = q[2]["label"].as_str().unwrap().to_lowercase();
                     let hits = |loose: bool| {
@@ -213,6 +217,15 @@ mod flows {
         assert!(first.contains("Now on screen:\nWi-Fi"), "a screen the agent has not seen is listed whole: {first}");
         let again = act(&mut engine, r#"tap "Wi-Fi""#).unwrap().text;
         assert_eq!(again, "Done.\nChanged:\nUnchanged.");
+    }
+
+    #[test]
+    fn a_handle_taps_the_control_it_numbered_and_a_stale_one_is_refused() {
+        let (mut engine, _dir) = engine();
+        act(&mut engine, r#"open app "Settings""#).unwrap();
+        assert_eq!(act(&mut engine, "tap e0").unwrap().status, "done");
+        let gone = act(&mut engine, "tap e40").unwrap_err_or_text();
+        assert!(gone.contains("e40 is not on the current screen"), "{gone}");
     }
 
     #[test]

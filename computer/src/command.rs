@@ -8,6 +8,8 @@ use serde_json::{json, Value};
 pub struct Target {
     pub label: Box<str>,
     pub ordinal: Option<u16>,
+    /// `e12`: an unlabeled control named by its number in the last screen listing.
+    pub handle: Option<u16>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -299,6 +301,15 @@ fn seconds_at(tokens: &[Lexeme], index: usize) -> Result<u16> {
 }
 
 fn target_at(tokens: &[Lexeme], index: usize) -> Result<(Target, usize)> {
+    if let Some(number) = tokens
+        .get(index)
+        .and_then(Lexeme::word)
+        .and_then(|word| word.strip_prefix('e'))
+        .filter(|digits| !digits.is_empty() && digits.len() <= 4)
+        .and_then(|digits| digits.parse::<u16>().ok())
+    {
+        return Ok((Target { label: format!("e{number}").into(), ordinal: None, handle: Some(number) }, index + 1));
+    }
     let label = quoted_at(tokens, index, "target")?;
     let mut next = index + 1;
     let ordinal = if is_word(tokens, next, "number") {
@@ -318,7 +329,7 @@ fn target_at(tokens: &[Lexeme], index: usize) -> Result<(Target, usize)> {
     } else {
         None
     };
-    Ok((Target { label, ordinal }, next))
+    Ok((Target { label, ordinal, handle: None }, next))
 }
 
 fn key_word(value: &str) -> Result<Key> {

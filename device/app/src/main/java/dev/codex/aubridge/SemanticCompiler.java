@@ -152,6 +152,10 @@ final class SemanticCompiler {
             return clickable || checkable || editable || scrollable || slider;
         }
 
+        boolean contains(int x, int y) {
+            return x >= left && x <= right && y >= top && y <= bottom;
+        }
+
         boolean hasBounds() {
             return right > left && bottom > top;
         }
@@ -172,7 +176,10 @@ final class SemanticCompiler {
     static final class Row {
         final String label, value, kind, state;
         final boolean enabled, selected;
-        int top = Integer.MAX_VALUE, left;
+        int top = Integer.MAX_VALUE, left, right, bottom;
+
+        /** The source id of the item this row stands for, to find its node again. */
+        long source = -1;
 
         Row(
                 String label,
@@ -192,6 +199,9 @@ final class SemanticCompiler {
         Row at(Item item) {
             top = SemanticCompiler.top(item);
             left = item.left;
+            right = item.right;
+            bottom = item.bottom;
+            source = item.id;
             return this;
         }
     }
@@ -287,8 +297,30 @@ final class SemanticCompiler {
             boolean selected = control != null && control.selected;
             String kind = kind(control, labels.get(0));
             String state = state(control, selected);
+            if (control != null) consumed.add(control.id);
             Item at = control != null && control.editable ? control : labels.get(0);
             rows.add(new Row(label, value, kind, state, enabled, selected).at(at));
+        }
+        // Icon-only controls have no words to quote; they are listed unlabeled so the host can give
+        // them a handle (and the marked screen image can show it).
+        int unlabeled = 0;
+        for (Item item : visible) {
+            if (unlabeled >= MAX_UNLABELED) break;
+            boolean control = item.interactive() && !item.scrollable && !item.heading;
+            if (!control || !item.label.isEmpty() || consumed.contains(item.id) || tooSmall(item))
+                continue;
+            if (surroundsLabel(item, visible)) continue;
+            consumed.add(item.id);
+            unlabeled++;
+            rows.add(
+                    new Row(
+                                    "",
+                                    "",
+                                    kind(item, item),
+                                    state(item, item.selected),
+                                    item.enabled,
+                                    item.selected)
+                            .at(item));
         }
         // The host numbers duplicate labels in list order and the resolver numbers them top to
         // bottom, then left to right, so every row after the heading is listed in that order.
@@ -342,6 +374,26 @@ final class SemanticCompiler {
             result.add(new Owned(owner, grouped));
         }
         return result;
+    }
+
+    private static final int MAX_UNLABELED = 24;
+
+    private static boolean tooSmall(Item item) {
+        return !item.hasBounds() || item.right - item.left < 24 || item.bottom - item.top < 24;
+    }
+
+    /**
+     * A control that has labeled content inside it is a container for that content, not an icon.
+     */
+    private static boolean surroundsLabel(Item box, List<Item> items) {
+        for (Item other : items) {
+            if (other != box
+                    && !other.label.isEmpty()
+                    && other.hasBounds()
+                    && other.area() <= box.area()
+                    && box.contains(other.centerX(), other.centerY())) return true;
+        }
+        return false;
     }
 
     private static boolean usefulMember(Item item, Item owner) {

@@ -108,7 +108,7 @@ pub(crate) fn app(rows: &Value, name: &str) -> Result<String> {
             _ => None,
         })
         .collect();
-    let target = Target { label: name.into(), ordinal: None };
+    let target = Target { label: name.into(), ordinal: None, handle: None };
     pick(&target, &candidates, "device").map_err(|error| match error.code {
         Code::Missing => Error::plain(Code::Missing, format!("No installed app is named \"{}\". Use the name shown under its launcher icon.", display(name))),
         Code::Ambiguous => Error::plain(Code::Ambiguous, format!("\"{}\" matches more than one app. Use the app's full display name.", display(name))),
@@ -190,7 +190,7 @@ mod tests {
     use serde_json::json;
 
     fn target(label: &str, ordinal: Option<u16>) -> Target {
-        Target { label: label.into(), ordinal }
+        Target { label: label.into(), ordinal, handle: None }
     }
 
     #[test]

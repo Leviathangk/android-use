@@ -8,7 +8,7 @@ pub const ACT_TOOL: &str = "android_act";
 
 /// Sent once at `initialize`; kept to what an agent cannot learn from the tool descriptions.
 pub const INSTRUCTIONS: &str = "Controls one Android device. Read `screen` once if the state is unknown, then act on names you saw. \
-Rows are names to quote, with a tag for non-buttons: `sw Wi-Fi=on`, `edit Email=\"x\"`; `Save#2` means `tap \"Save\" number 2`. \
+Rows are names to quote, with a tag for non-buttons: `sw Wi-Fi=on`, `edit Email=\"x\"`; `Save#2` means `tap \"Save\" number 2`; `e7` has no label: tap e7. \
 Every action returns the new screen or only what `Changed:`. stale: retry. partial or unknown: read before acting again, never repeat. \
 Ask first: purchases, messages, account or security changes, deletes, camera, microphone, location, recording.";
 
@@ -44,7 +44,7 @@ pub const FORMS: &[Form] = &[
     read(false, "browser tabs", &["browser tabs"]),
     read(false, "location | capabilities", &["location", "capabilities"]),
     read(false, r#"image hash "NAME" | image difference "A" and "B""#, &[r#"image hash "screen""#, r#"image difference "screen" and "photo""#]),
-    act(true, r#"tap "LABEL" [number N]"#, &[r#"tap "Wi-Fi""#, r#"tap "Save" number 2"#]),
+    act(true, r#"tap "LABEL" [number N] | tap eN"#, &[r#"tap "Wi-Fi""#, r#"tap "Save" number 2"#, "tap e12"]),
     act(true, r#"toggle "LABEL""#, &[r#"toggle "Wi-Fi""#]),
     act(true, r#"type "TEXT" in "FIELD""#, &[r#"type "hello" in "Message""#]),
     act(

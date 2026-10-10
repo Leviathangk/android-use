@@ -213,9 +213,9 @@ fn run_task(mcp: &mut Mcp, task: &Task, latency: &mut BTreeMap<String, Vec<u128>
     };
     'steps: for step in task.steps {
         let (tool, first, more, expect, limit) = match step {
-            Act(command, expect) => ("android.act", *command, *command, *expect, 2),
-            Read(command, expect) => ("android.read", *command, *command, *expect, 2),
-            Until { first, more, target, limit } => ("android.act", *first, *more, *target, *limit),
+            Act(command, expect) => ("android_act", *command, *command, *expect, 2),
+            Read(command, expect) => ("android_read", *command, *command, *expect, 2),
+            Until { first, more, target, limit } => ("android_act", *first, *more, *target, *limit),
         };
         let until = matches!(step, Until { .. });
         let mut command = first;
@@ -233,7 +233,7 @@ fn run_task(mcp: &mut Mcp, task: &Task, latency: &mut BTreeMap<String, Vec<u128>
                 command = more; // keep scrolling
             } else {
                 recovered = true;
-                turn(mcp, "android.read", "screen", &mut calls)?; // look, then try the turn again
+                turn(mcp, "android_read", "screen", &mut calls)?; // look, then try the turn again
             }
         }
     }

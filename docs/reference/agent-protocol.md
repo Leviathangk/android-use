@@ -2,8 +2,8 @@
 
 MCP advertises two tools. Each takes one string, `command`; the tool descriptions list the common commands.
 
-- `android.read` never changes the device: `status`, `screen`, `screen full`, `screen changes`, `find "TEXT"`, `page`, `page text matching "TEXT"`, `browser tabs`, `notifications`, `location`, `capabilities`.
-- `android.act` changes it: `tap "LABEL"`, `type "TEXT" in "FIELD"`, `scroll down`, `open app "NAME"`, `page click "LABEL"`, `wait for text "TEXT" up to 5 seconds`, `verify "LABEL" exists`. Join up to 16 changes with `then`.
+- `android_read` never changes the device: `status`, `screen`, `screen full`, `screen changes`, `find "TEXT"`, `page`, `page text matching "TEXT"`, `browser tabs`, `notifications`, `location`, `capabilities`.
+- `android_act` changes it: `tap "LABEL"`, `type "TEXT" in "FIELD"`, `scroll down`, `open app "NAME"`, `page click "LABEL"`, `wait for text "TEXT" up to 5 seconds`, `verify "LABEL" exists`. Join up to 16 changes with `then`.
 
 Quote labels exactly as `screen` shows them. A duplicated label is listed as `Save (number 2) — button`; send `tap "Save" number 2`. The host owns observation, targets, limits, and the journal. Never construct generations, refs, package names, or JSON plans.
 

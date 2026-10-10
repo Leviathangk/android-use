@@ -1,0 +1,76 @@
+{
+  "rows": [
+    [
+      "Internet",
+      "",
+      "heading",
+      "",
+      true,
+      false
+    ],
+    [
+      "Navigate up",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fix connectivity",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "T-Mobile",
+      "Connected / 5G",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Settings",
+      "",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Wi-Fi",
+      "",
+      "switch",
+      "unchecked",
+      true,
+      false
+    ],
+    [
+      "Network preferences",
+      "Wi‑Fi doesn't turn back on automatically",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Saved networks",
+      "1 network",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Non-carrier data usage",
+      "252 MB used Sep 12 – Oct 10",
+      "control",
+      "",
+      true,
+      false
+    ]
+  ]
+}

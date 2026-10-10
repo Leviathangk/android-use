@@ -147,6 +147,12 @@ pub(crate) fn format_semantic_rows(rows: &[SemanticRow], full: bool, focus: &str
     )
 }
 
+/// Renders raw semantic rows from the helper as the agent sees `screen` (or `screen full`). Used by
+/// the token-budget gate and the golden-screen tools.
+pub fn render_screen(rows: &Value, full: bool) -> Result<String> {
+    Ok(format_semantic_rows(&parse_semantic_rows(rows)?, full, ""))
+}
+
 pub(crate) fn semantic_delta(previous: &[SemanticRow], current: &[SemanticRow]) -> Vec<SemanticRow> {
     current.iter().filter(|row| !previous.contains(row)).cloned().collect()
 }

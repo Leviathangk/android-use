@@ -1,4 +1,39 @@
-Read: status; screen [full|changes|matching "X"]; find "X"; page [text [matching "X"]]; browser tabs; notifications; location; capabilities; image hash "A"; image difference "A" and "B".
-Act: tap|toggle|hold "T"; type "X" in "T"; scroll D [in "T"]; press K; open app|setting|link "X"; wait for "T"|text "X"|screen change up to N seconds; verify "T" exists|is gone; verify text "X" exists; capture screen; take rear|front camera photo; record microphone|screen for N seconds; open|dismiss notification "T"; run notification action "T"; tap point X Y; swipe from X Y to X Y over MS milliseconds; crop image "A" from X Y with size W by H.
-Page: page open|click|focus|type|press|scroll|wait for text|wait for css|back|forward|reload|screenshot; new tab "URL"; select|close tab "T".
-D up/down/left/right. K back/home/recents/notifications/enter. N 0–30. ≤32 steps, ≤16 changes. "T" number N for duplicates.
+# Commands
+
+Generated from `computer/src/spec.rs`; edit the table, then run `cargo xtask docs --write`.
+
+## android_read
+
+- status
+- screen [full|changes|matching "TEXT"]
+- find "TEXT"
+- page [text [matching "TEXT"]]
+- notifications
+- browser tabs
+- location | capabilities
+- image hash "NAME" | image difference "A" and "B"
+
+## android_act
+
+Join up to 16 steps with `then`. Quote labels as `screen` shows them; add `number N` for a duplicate. N is 0-30. `tap point` and `swipe` use the attached image's pixels, only after a label is missing.
+
+- tap "LABEL" [number N]
+- toggle "LABEL"
+- type "TEXT" in "FIELD"
+- scroll up|down|left|right [in "AREA"]
+- press back|home|recents|notifications|enter
+- open app "NAME"
+- open link "URL"
+- wait for text "TEXT" up to N seconds
+- verify text "TEXT" exists
+- page open "URL" | page click "LABEL" | page type "TEXT" in "FIELD"
+- hold "LABEL"
+- open setting "wifi|bluetooth|display|sound|notifications|apps|battery|accessibility|date and time|developer options"
+- wait for "LABEL" up to N seconds | wait for screen change up to N seconds
+- verify "LABEL" exists | verify "LABEL" is gone
+- page press "Enter|Tab|Escape|Backspace|ArrowUp|ArrowDown" | page scroll PIXELS | page wait for text "TEXT" up to N seconds | page focus "LABEL" | page back|forward|reload|screenshot
+- new tab "URL" | select tab "TITLE" | close tab "TITLE"
+- capture screen | take rear|front camera photo [at W by H] | record microphone|screen for N seconds
+- open notification "TITLE" | dismiss notification "TITLE" | run notification action "TITLE"
+- tap point X Y | swipe from X1 Y1 to X2 Y2 over MS milliseconds (coordinates on the attached screen image)
+- crop image "NAME" from X Y with size W by H

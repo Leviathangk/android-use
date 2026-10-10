@@ -1,0 +1,172 @@
+{
+  "rows": [
+    [
+      "AU agentic benchmark fixture",
+      "",
+      "heading",
+      "",
+      true,
+      false
+    ],
+    [
+      "Benchmark scroll surface",
+      "",
+      "scroll area",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fixture text",
+      "Fixture text",
+      "text field",
+      "",
+      true,
+      false
+    ],
+    [
+      "SUBMIT FORM",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "Benchmark toggle",
+      "",
+      "switch",
+      "unchecked",
+      true,
+      false
+    ],
+    [
+      "OPEN BENCHMARK DIALOG",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "DETAILS",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "DETAILS",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "SAVE DRAFT",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "LOAD SLOW CONTENT",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "Ready",
+      "",
+      "",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fixture row 1",
+      "",
+      "",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fixture row 2",
+      "",
+      "",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fixture row 3",
+      "",
+      "",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fixture row 4",
+      "",
+      "",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fixture row 5",
+      "",
+      "",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fixture row 6",
+      "",
+      "",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fixture row 7",
+      "",
+      "",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fixture row 8",
+      "",
+      "",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fixture row 9",
+      "",
+      "",
+      "",
+      true,
+      false
+    ],
+    [
+      "Fixture row 10",
+      "",
+      "",
+      "",
+      true,
+      false
+    ]
+  ]
+}

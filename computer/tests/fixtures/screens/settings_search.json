@@ -1,0 +1,92 @@
+{
+  "rows": [
+    [
+      "Use Battery Saver",
+      "",
+      "heading",
+      "",
+      true,
+      false
+    ],
+    [
+      "Back",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "Search settings",
+      "battery",
+      "text field",
+      "",
+      true,
+      false
+    ],
+    [
+      "Clear text",
+      "",
+      "button",
+      "",
+      true,
+      false
+    ],
+    [
+      "Battery > Battery Saver",
+      "",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Use Battery Saver",
+      "",
+      "switch",
+      "unchecked",
+      true,
+      false
+    ],
+    [
+      "Battery",
+      "",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Battery Saver",
+      "Battery",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Battery widget",
+      "Battery",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Battery Saver",
+      "Battery > Battery Saver",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Battery usage",
+      "Battery > Battery usage",
+      "control",
+      "",
+      true,
+      false
+    ]
+  ]
+}

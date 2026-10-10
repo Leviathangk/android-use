@@ -1,0 +1,92 @@
+{
+  "rows": [
+    [
+      "Search Settings",
+      "",
+      "heading",
+      "",
+      true,
+      false
+    ],
+    [
+      "Storage",
+      "41% used - 4.73 GB free",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Battery",
+      "100%",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "System",
+      "Languages, gestures, time, backup",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "About emulated device",
+      "sdk_gphone64_arm64",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Security & privacy",
+      "App security, device lock, permissions",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Location",
+      "On / 5 apps have access to location",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Passwords, passkeys & accounts",
+      "Suggestions for sign-in & autofill",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Digital Wellbeing & parental controls",
+      "Screen time, app timers, bedtime schedules",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Safety & emergency",
+      "Emergency SOS, medical info, alerts",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Accessibility",
+      "",
+      "control",
+      "",
+      true,
+      false
+    ]
+  ]
+}

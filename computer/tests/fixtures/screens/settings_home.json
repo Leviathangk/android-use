@@ -1,0 +1,84 @@
+{
+  "rows": [
+    [
+      "Search Settings",
+      "",
+      "heading",
+      "",
+      true,
+      false
+    ],
+    [
+      "Google",
+      "Services & preferences",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Network & internet",
+      "Mobile, Wi‑Fi, hotspot",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Connected devices",
+      "Bluetooth, pairing",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Apps",
+      "Assistant, recent apps, default apps",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Notifications",
+      "Notification history, conversations",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Sound & vibration",
+      "Volume and haptics",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Modes",
+      "Do Not Disturb, Bedtime",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Display & touch",
+      "Dark theme, font size, touch",
+      "control",
+      "",
+      true,
+      false
+    ],
+    [
+      "Wallpaper & style",
+      "Colors, themed icons, app grid",
+      "control",
+      "",
+      true,
+      false
+    ]
+  ]
+}

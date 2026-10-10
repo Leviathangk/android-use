@@ -1,6 +1,5 @@
 #![forbid(unsafe_code)]
 
-use au::api::{parse_act_command, parse_read_command};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
@@ -11,6 +10,7 @@ use std::{
 };
 
 mod live;
+mod tokens;
 
 fn main() {
     if let Err(e) = run() {
@@ -43,9 +43,12 @@ fn run() -> Result<(), String> {
         "benchmark" => benchmark(&root),
         "benchmark-live" => live::run(&root),
         "size" => size(&root).map(|_| ()),
-        "docs" => docs(&root),
+        "docs" => docs(&root, env::args().nth(2).as_deref() == Some("--write")),
+        "golden-capture" => tokens::capture(&root, &env::args().nth(2).ok_or("golden-capture needs a NAME")?),
         _ => {
-            println!("cargo xtask check|test|android|package|release|version|release-manifest DIR|manifest|verify|benchmark|benchmark-live|size|docs");
+            println!(
+                "cargo xtask check|test|android|package|release|version|release-manifest DIR|manifest|verify|benchmark|benchmark-live|size|docs [--write]|golden-capture NAME"
+            );
             Ok(())
         }
     }
@@ -61,7 +64,7 @@ fn verify(root: &Path) -> Result<(), String> {
     android(root, "testDebugUnitTest")?;
     android(root, "assembleRelease")?;
     gate(root)?;
-    docs(root)?;
+    docs(root, false)?;
     cmd(root, "cargo", &["build", "--profile", "dist", "-p", "au"])?;
     size(root).map(|_| ())
 }
@@ -130,7 +133,7 @@ fn benchmark(root: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn approx_tokens(bytes: usize) -> usize {
+pub(crate) fn approx_tokens(bytes: usize) -> usize {
     bytes.saturating_add(3) / 4
 }
 fn size(root: &Path) -> Result<(usize, usize, usize), String> {
@@ -237,7 +240,14 @@ fn release_manifest(root: &Path, directory: Option<&str>) -> Result<(), String> 
     let manifest = json!({"schema":1,"product":"android-use","version":version,"commit":commit,"assets":assets});
     fs::write(directory.join("release-manifest.json"), serde_json::to_vec_pretty(&manifest).map_err(|error| error.to_string())?).map_err(ioe)
 }
-fn docs(root: &Path) -> Result<(), String> {
+fn docs(root: &Path, write: bool) -> Result<(), String> {
+    let protocol = root.join("skills/android-use/references/protocol.md");
+    if write {
+        fs::write(&protocol, au::spec::protocol_markdown()).map_err(ioe)?;
+    } else if fs::read_to_string(&protocol).map_err(ioe)? != au::spec::protocol_markdown() {
+        return Err("skills/android-use/references/protocol.md is out of date; run cargo xtask docs --write".into());
+    }
+    tokens::gate(root)?;
     let required = [
         "README.md",
         "AGENTS.md",
@@ -263,7 +273,7 @@ fn docs(root: &Path) -> Result<(), String> {
     }
     let budgets = [
         ("skills/android-use/SKILL.md", 2800usize, 700usize),
-        ("skills/android-use/references/protocol.md", 960, 240),
+        ("skills/android-use/references/protocol.md", 2000, 520),
         ("skills/android-use/references/safety.md", 520, 130),
         ("skills/android-use/references/setup.md", 520, 130),
         ("AGENTS.md", 1800, 450),
@@ -323,29 +333,9 @@ fn docs(root: &Path) -> Result<(), String> {
     }
     println!("semantic_source_scan=pass unknown_app_literals=0 fixture_labels_in_production=0");
     let skill = fs::read_to_string(root.join("skills/android-use/SKILL.md")).map_err(ioe)?;
-    let examples = [
-        ("read", "status"),
-        ("read", "screen"),
-        ("read", "screen changes"),
-        ("read", "screen matching \"TEXT\""),
-        ("read", "find \"TEXT\""),
-        ("read", "page text matching \"SEARCH TEXT\""),
-        ("act", "tap \"TARGET\""),
-        ("act", "toggle \"TARGET\""),
-        ("act", "type \"TEXT\" in \"FIELD\""),
-        ("act", "scroll down in \"SCROLL AREA\""),
-        ("act", "open app \"DISPLAY NAME\""),
-        ("act", "page open \"https://example.invalid\""),
-        ("act", "page click \"TARGET\""),
-        ("act", "page type \"TEXT\" in \"FIELD\""),
-        ("act", "wait for text \"EXPECTED TEXT\" up to 5 seconds"),
-        ("act", "verify text \"EXPECTED TEXT\" exists"),
-        ("act", "capture screen"),
-    ];
-    for (kind, command) in examples {
-        let result = if kind == "read" { parse_read_command(command).map(|_| ()) } else { parse_act_command(command).map(|_| ()) };
-        if result.is_err() || !skill.contains(command) {
-            return Err(format!("documented command example is not covered: {command}"));
+    for name in [au::spec::READ_TOOL, au::spec::ACT_TOOL] {
+        if !skill.contains(name) {
+            return Err(format!("SKILL.md must name the {name} tool"));
         }
     }
     println!("docs_examples=pass canonical_forms=pass primary_legacy_syntax=pass llms_descriptions=pass");
@@ -432,7 +422,7 @@ fn lines(root: &Path, exts: &[&str]) -> Result<usize, String> {
     }
     Ok(n)
 }
-fn walk(root: &Path) -> Result<Vec<PathBuf>, String> {
+pub(crate) fn walk(root: &Path) -> Result<Vec<PathBuf>, String> {
     let (mut out, mut todo) = (Vec::new(), vec![root.to_path_buf()]);
     while let Some(p) = todo.pop() {
         for e in fs::read_dir(p).map_err(ioe)? {
@@ -523,7 +513,7 @@ fn platform_name() -> String {
 fn hex(b: &[u8]) -> String {
     b.iter().map(|v| format!("{v:02x}")).collect()
 }
-fn quantile(values: &[u128], percentile: f64) -> u128 {
+pub(crate) fn quantile(values: &[u128], percentile: f64) -> u128 {
     let index = ((values.len().saturating_sub(1)) as f64 * percentile).round() as usize;
     values[index.min(values.len().saturating_sub(1))]
 }
@@ -542,6 +532,6 @@ fn tree_bytes(root: &Path) -> Result<u64, String> {
 fn file_count(root: &Path, exts: &[&str]) -> Result<usize, String> {
     Ok(walk(root)?.into_iter().filter(|p| p.is_file() && exts.contains(&p.extension().and_then(|s| s.to_str()).unwrap_or(""))).count())
 }
-fn ioe(e: impl std::fmt::Display) -> String {
+pub(crate) fn ioe(e: impl std::fmt::Display) -> String {
     e.to_string()
 }

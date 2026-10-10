@@ -28,8 +28,8 @@ test("README and recovery guide keep the agent installer contract aligned", asyn
     "au setup",
     "au doctor",
     "serve --mcp",
-    "android.read command status",
-    "android.read command screen",
+    "android_read command status",
+    "android_read command screen",
     "command-string tools",
   ]) {
     for (const value of prompts) {

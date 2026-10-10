@@ -1,4 +1,7 @@
-use crate::api::{safe_setting, safe_url, Code, Direction, Error, Key, Result, MAX_COMMAND, MAX_MUTATIONS, MAX_OPS, MAX_TEXT};
+use crate::{
+    api::{safe_setting, safe_url, Code, Direction, Error, Key, Result, MAX_COMMAND, MAX_MUTATIONS, MAX_OPS, MAX_TEXT},
+    spec,
+};
 use serde_json::{json, Value};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -10,6 +13,7 @@ pub struct Target {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CommandRead {
     Status,
+    Help,
     Screen { full: bool, matching: Option<Box<str>>, delta: bool },
     BrowserTabs,
     Page,
@@ -342,6 +346,9 @@ fn parse_read_inner(input: &str) -> Result<CommandRead> {
     let t = &parts[0];
     if t.len() == 1 && is_word(t, 0, "status") {
         return Ok(CommandRead::Status);
+    }
+    if t.len() == 1 && is_word(t, 0, "help") {
+        return Ok(CommandRead::Help);
     }
     if is_word(t, 0, "screen") {
         if t.len() == 1 {
@@ -700,40 +707,11 @@ fn url_at(tokens: &[Lexeme], index: usize, name: &str) -> Result<Box<str>> {
     Ok(url)
 }
 
-/// MCP tool definitions. The descriptions carry the whole grammar so an
-/// agent can use the tools correctly without any other documentation.
+/// MCP tool definitions. Each description lists the common commands; `help` returns the rest.
 pub fn tool_schemas() -> Value {
-    let input = json!({"type":"object","additionalProperties":false,"required":["command"],"properties":{"command":{"type":"string","minLength":1,"maxLength":MAX_COMMAND}}});
+    let input = json!({"type":"object","required":["command"],"properties":{"command":{"type":"string"}}});
     json!([
-        {
-            "name": "android.read",
-            "title": "Read the Android device",
-            "description": READ_DESCRIPTION,
-            "annotations": {"title": "Read the Android device", "readOnlyHint": true, "openWorldHint": true},
-            "inputSchema": input,
-        },
-        {
-            "name": "android.act",
-            "title": "Act on the Android device",
-            "description": ACT_DESCRIPTION,
-            "annotations": {"title": "Act on the Android device", "readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": true},
-            "inputSchema": input,
-        }
+        {"name": spec::READ_TOOL, "description": spec::read_description(), "annotations": {"readOnlyHint": true}, "inputSchema": input},
+        {"name": spec::ACT_TOOL, "description": spec::act_description(), "inputSchema": input}
     ])
 }
-
-const READ_DESCRIPTION: &str = "Look at the connected Android device without changing it. Send one command:\n\
-status | screen | screen full | screen changes | screen matching \"TEXT\" | find \"TEXT\"\n\
-page | page text | page text matching \"TEXT\" | browser tabs (Chrome)\n\
-notifications | location | capabilities | image hash \"NAME\" | image difference \"A\" and \"B\"\n\
-screen lists visible controls as `Label — state kind`; a duplicated label shows the (number N) to use. \
-If a screen has little readable text, its image is attached. Read only when you do not already know the state: android.act reports the screen after each change.";
-
-const ACT_DESCRIPTION: &str = "Change the connected Android device with one plain command. Quote the exact visible label in straight double quotes; add number N after a duplicated label. Join up to 16 changes with then.\n\
-Android: tap \"LABEL\" | toggle \"LABEL\" | hold \"LABEL\" | type \"TEXT\" in \"FIELD\" | scroll up|down|left|right [in \"AREA\"] | press back|home|recents|notifications|enter | \
-open app \"NAME\" | open setting \"wifi|bluetooth|display|sound|notifications|apps|battery|accessibility|date and time|developer options\" | open link \"https://…\"\n\
-Checks: wait for \"LABEL\" up to N seconds | wait for text \"TEXT\" up to N seconds | wait for screen change up to N seconds | verify \"LABEL\" exists | verify \"LABEL\" is gone | verify text \"TEXT\" exists (N ≤ 30)\n\
-Chrome: page open \"URL\" | page click \"LABEL\" | page type \"TEXT\" in \"FIELD\" | page press \"Enter|Tab|Escape|Backspace|ArrowUp|ArrowDown\" | page scroll PIXELS | page wait for text \"TEXT\" up to N seconds | page back | page reload | page screenshot | new tab \"URL\" | select tab \"TITLE\" | close tab \"TITLE\"\n\
-Media and notifications (ask the user first): capture screen | take rear|front camera photo | record microphone|screen for N seconds | open notification \"TITLE\" | dismiss notification \"TITLE\" | run notification action \"TITLE\"\n\
-Fallback after an attached screen image only: tap point X Y | swipe from X1 Y1 to X2 Y2 over MS milliseconds (image pixel coordinates).\n\
-Results say what ran and what is on screen now. stale = nothing ran, retry; partial or unknown = read before changing anything again.";

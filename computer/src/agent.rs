@@ -109,6 +109,7 @@ impl Engine {
     fn read_state(&mut self, command: CommandRead) -> Result<ModelResponse> {
         let text = match command {
             CommandRead::Status => format_status(&self.read(Read::Status)?),
+            CommandRead::Help => crate::spec::help_text(),
             CommandRead::Screen { full, matching, delta } => return self.read_screen(full, matching.as_deref(), delta),
             CommandRead::BrowserTabs => format_browser_tabs(&self.read(Read::Browser { op: BrowserRead::Tabs })?),
             CommandRead::Page => format_browser_page(&self.read_page()?),

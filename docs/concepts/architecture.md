@@ -11,7 +11,7 @@ sequenceDiagram
     participant Agent
     participant au as au (computer)
     participant Helper as Helper (device)
-    Agent->>au: android.act  tap "Wi-Fi"
+    Agent->>au: android_act  tap "Wi-Fi"
     au->>Helper: observe (cached if unchanged)
     au->>Helper: resolve "Wi-Fi"
     Helper-->>au: ref 12

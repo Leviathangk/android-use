@@ -107,7 +107,7 @@ fn ready_step() -> Value {
         "Android Use is ready for an agent",
         &[
             "Configure the local MCP server with the absolute path to au and the arguments serve --mcp, then reload the agent.",
-            "Verify with android.read status, then android.read screen, without changing the device.",
+            "Verify with android_read status, then android_read screen, without changing the device.",
             "Shell-only agents can use the same commands directly: au read screen, au act 'tap \"LABEL\"'.",
         ],
         "Start the local server with au serve --mcp.",

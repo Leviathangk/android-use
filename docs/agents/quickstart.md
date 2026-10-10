@@ -11,9 +11,9 @@
 3. Try it:
 
 ```text
-android.read: status
-android.read: screen
-android.act: tap "Settings"
+android_read: status
+android_read: screen
+android_act: tap "Settings"
 ```
 
 Use `page ...` commands for Chrome content. Actions report the resulting screen, so read only when the state is unknown. After `partial` or `unknown`, read before changing anything; never replay an uncertain action. Installation and repair: [install](install.md). Grammar and results: [agent protocol](../reference/agent-protocol.md).

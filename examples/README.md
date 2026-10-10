@@ -3,17 +3,17 @@
 Send each command as the `command` string to the matching MCP tool, or run it with `au read` / `au act` in a shell.
 
 ```text
-android.read: status
-android.read: screen
-android.act: open app "DISPLAY NAME" then wait for "EXPECTED LABEL" up to 5 seconds
-android.act: tap "TARGET"
-android.act: type "TEXT" in "FIELD" then tap "TARGET" then verify text "EXPECTED TEXT" exists
-android.act: scroll down
-android.act: page open "https://example.invalid" then page wait for text "EXPECTED TEXT" up to 10 seconds
-android.read: page text matching "SEARCH TEXT"
-android.act: page click "TARGET"
-android.read: notifications
-android.act: capture screen
+android_read: status
+android_read: screen
+android_act: open app "DISPLAY NAME" then wait for "EXPECTED LABEL" up to 5 seconds
+android_act: tap "TARGET"
+android_act: type "TEXT" in "FIELD" then tap "TARGET" then verify text "EXPECTED TEXT" exists
+android_act: scroll down
+android_act: page open "https://example.invalid" then page wait for text "EXPECTED TEXT" up to 10 seconds
+android_read: page text matching "SEARCH TEXT"
+android_act: page click "TARGET"
+android_read: notifications
+android_act: capture screen
 ```
 
 The same from a shell:

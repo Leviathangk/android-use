@@ -21,11 +21,11 @@ final class Targets {
         String s =
                 value.replaceAll("[\\[\\]{}]", "")
                         .replaceAll(SPACE + "+", " ")
-                        .trim()
+                        .replaceAll("^ | $", "")
                         .toLowerCase(Locale.ROOT);
         // A label truncated for display ends in an ellipsis; the text before it still names the
-        // item.
-        if (s.endsWith("\u2026")) s = s.substring(0, s.length() - 1).trim();
+        // item. Only White_Space is trimmed (not String.trim's control characters), as on the host.
+        if (s.endsWith("\u2026")) s = s.substring(0, s.length() - 1).replaceAll(" $", "");
         return s;
     }
 

@@ -61,4 +61,10 @@ public class TargetsTest {
                 Collections.singletonList(0),
                 Targets.match(nodes(new String[] {"Save draft", ""}), "Save\u2026"));
     }
+
+    @Test
+    public void onlyUnicodeWhiteSpaceIsTrimmedLikeTheHost() {
+        assertEquals("\u0007save", Targets.normalize("\u0007Save"));
+        assertEquals("loading\u0001", Targets.normalize("Loading\u0001\u2026"));
+    }
 }

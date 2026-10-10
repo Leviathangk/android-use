@@ -27,13 +27,6 @@ const AUBENCH: &str = "dev.codex.aubench/.MainActivity";
 enum Step {
     Act(&'static str, &'static str),
     Read(&'static str, &'static str),
-    /// Repeats `more` until the result shows `target`, at most `limit` calls in all.
-    Until {
-        first: &'static str,
-        more: &'static str,
-        target: &'static str,
-        limit: usize,
-    },
 }
 
 struct Task {
@@ -43,7 +36,7 @@ struct Task {
     steps: &'static [Step],
 }
 
-use Step::{Act, Read, Until};
+use Step::{Act, Read};
 
 const TASKS: &[Task] = &[
     Task { name: "status_and_screen", reset: None, steps: &[Read("status", "Ready"), Read("screen", "")] },
@@ -76,16 +69,12 @@ const TASKS: &[Task] = &[
     Task {
         name: "scroll_to_row_40",
         reset: Some(AUBENCH),
-        steps: &[
-            Act("open app \"AU Benchmark Fixture\"", "Done"),
-            Until { first: "scroll down in \"Benchmark scroll surface\"", more: "scroll down in \"Benchmark scroll surface\"", target: "Fixture row 40", limit: 10 },
-            Act("tap \"Fixture row 40\"", "Done"),
-        ],
+        steps: &[Act("open app \"AU Benchmark Fixture\" then scroll down in \"Benchmark scroll surface\" until \"Fixture row 40\" then tap \"Fixture row 40\"", "Done")],
     },
     Task {
         name: "find_setting_scroll",
         reset: Some(SETTINGS),
-        steps: &[Until { first: "open app \"Settings\"", more: "scroll down", target: "About emulated device", limit: 8 }, Act("tap \"About emulated device\"", "Android version")],
+        steps: &[Act("open app \"Settings\" then scroll down until \"About emulated device\" then tap \"About emulated device\"", "Android version")],
     },
     Task {
         name: "toggle_wifi",
@@ -196,7 +185,10 @@ fn adb(args: &[&str]) {
     let _ = Command::new(program).args(args).stdout(Stdio::null()).stderr(Stdio::null()).status();
 }
 
-fn run_task(mcp: &mut Mcp, task: &Task, latency: &mut BTreeMap<String, Vec<u128>>) -> Result<Run, String> {
+/// Each run gets a fresh server: a new agent has seen no screen, so none is summarized as a diff.
+fn run_task(exe: &Path, task: &Task, latency: &mut BTreeMap<String, Vec<u128>>) -> Result<Run, String> {
+    let mut mcp = Mcp::start(exe)?;
+    let mcp = &mut mcp;
     if let Some(activity) = task.reset {
         adb(&["shell", "am", "start", "-W", "-S", "--activity-clear-task", "-n", activity]);
     }
@@ -216,29 +208,20 @@ fn run_task(mcp: &mut Mcp, task: &Task, latency: &mut BTreeMap<String, Vec<u128>
         Ok(call)
     };
     'steps: for step in task.steps {
-        let (tool, first, more, expect, limit) = match step {
-            Act(command, expect) => ("android_act", *command, *command, *expect, 2),
-            Read(command, expect) => ("android_read", *command, *command, *expect, 2),
-            Until { first, more, target, limit } => ("android_act", *first, *more, *target, *limit),
+        let (tool, command, expect) = match step {
+            Act(command, expect) => ("android_act", *command, *expect),
+            Read(command, expect) => ("android_read", *command, *expect),
         };
-        let until = matches!(step, Until { .. });
-        let mut command = first;
-        let mut recovered = false;
-        loop {
-            let call = turn(mcp, tool, command, &mut calls)?;
-            if !call.error && call.text.contains(expect) {
-                continue 'steps;
-            }
-            if calls >= 40 || (!until && recovered) || (until && calls > limit) {
-                ok = false;
-                break 'steps;
-            }
-            if until {
-                command = more; // keep scrolling
-            } else {
-                recovered = true;
-                turn(mcp, "android_read", "screen", &mut calls)?; // look, then try the turn again
-            }
+        let call = turn(mcp, tool, command, &mut calls)?;
+        if !call.error && call.text.contains(expect) {
+            continue 'steps;
+        }
+        // Look, then try the turn once more.
+        turn(mcp, "android_read", "screen", &mut calls)?;
+        let again = turn(mcp, tool, command, &mut calls)?;
+        if again.error || !again.text.contains(expect) {
+            ok = false;
+            break 'steps;
         }
     }
     Ok(Run { trace, ok, calls, wall_ms: started.elapsed().as_millis(), result_tokens, output_tokens })
@@ -250,13 +233,13 @@ pub fn run(root: &Path) -> Result<(), String> {
         return Err("build target/dist/au (cargo build --profile dist -p au) before running the live benchmark".into());
     }
     let runs: usize = env::var("BENCH_RUNS").ok().and_then(|value| value.parse().ok()).unwrap_or(3);
-    let mut mcp = Mcp::start(&exe)?;
+    let mcp = Mcp::start(&exe)?;
     let mut latency: BTreeMap<String, Vec<u128>> = BTreeMap::new();
     let mut report = Vec::new();
     let mut traces = Vec::new();
     println!("fixed_tokens_per_turn={}", mcp.fixed_tokens);
     for task in TASKS {
-        let results: Vec<Run> = (0..runs).map(|_| run_task(&mut mcp, task, &mut latency)).collect::<Result<_, _>>()?;
+        let results: Vec<Run> = (0..runs).map(|_| run_task(&exe, task, &mut latency)).collect::<Result<_, _>>()?;
         let mean = |f: &dyn Fn(&Run) -> f64| results.iter().map(f).sum::<f64>() / results.len() as f64;
         let entry = json!({
             "task": task.name,

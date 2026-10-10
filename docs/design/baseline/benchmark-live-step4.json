@@ -1,0 +1,142 @@
+{
+  "attempts": 96,
+  "fixed_tokens": 379,
+  "latency": {
+    "android_act open": {
+      "n": 90,
+      "p50": 1850,
+      "p95": 4122
+    },
+    "android_act tap": {
+      "n": 103,
+      "p50": 698,
+      "p95": 2166
+    },
+    "android_act type": {
+      "n": 22,
+      "p50": 1169,
+      "p95": 4907
+    },
+    "android_read screen": {
+      "n": 17,
+      "p50": 18,
+      "p95": 82
+    },
+    "android_read status": {
+      "n": 8,
+      "p50": 143,
+      "p95": 415
+    }
+  },
+  "success": 93,
+  "tasks": [
+    {
+      "calls": 2.0,
+      "input_tokens": 848.0,
+      "output_tokens": 24.0,
+      "runs": 8,
+      "success": 8,
+      "task": "status_and_screen",
+      "wall_ms": 180.375
+    },
+    {
+      "calls": 2.0,
+      "input_tokens": 863.0,
+      "output_tokens": 34.0,
+      "runs": 8,
+      "success": 8,
+      "task": "toggle_switch",
+      "wall_ms": 2429.0
+    },
+    {
+      "calls": 2.0,
+      "input_tokens": 865.0,
+      "output_tokens": 42.0,
+      "runs": 8,
+      "success": 8,
+      "task": "fill_submit_form",
+      "wall_ms": 2988.125
+    },
+    {
+      "calls": 3.0,
+      "input_tokens": 1337.0,
+      "output_tokens": 48.0,
+      "runs": 8,
+      "success": 8,
+      "task": "dismiss_dialog",
+      "wall_ms": 3154.875
+    },
+    {
+      "calls": 3.0,
+      "input_tokens": 1340.0,
+      "output_tokens": 49.0,
+      "runs": 8,
+      "success": 8,
+      "task": "confirm_dialog",
+      "wall_ms": 3114.625
+    },
+    {
+      "calls": 2.0,
+      "input_tokens": 858.0,
+      "output_tokens": 34.0,
+      "runs": 8,
+      "success": 8,
+      "task": "duplicate_label",
+      "wall_ms": 2152.75
+    },
+    {
+      "calls": 2.0,
+      "input_tokens": 868.0,
+      "output_tokens": 31.0,
+      "runs": 8,
+      "success": 8,
+      "task": "near_miss_label",
+      "wall_ms": 2081.125
+    },
+    {
+      "calls": 2.0,
+      "input_tokens": 858.0,
+      "output_tokens": 48.0,
+      "runs": 8,
+      "success": 8,
+      "task": "slow_content",
+      "wall_ms": 3886.875
+    },
+    {
+      "calls": 1.0,
+      "input_tokens": 474.0,
+      "output_tokens": 42.0,
+      "runs": 8,
+      "success": 8,
+      "task": "scroll_to_row_40",
+      "wall_ms": 3863.75
+    },
+    {
+      "calls": 1.5,
+      "input_tokens": 649.875,
+      "output_tokens": 46.75,
+      "runs": 8,
+      "success": 7,
+      "task": "find_setting_scroll",
+      "wall_ms": 4297.625
+    },
+    {
+      "calls": 4.125,
+      "input_tokens": 1745.25,
+      "output_tokens": 59.625,
+      "runs": 8,
+      "success": 7,
+      "task": "toggle_wifi",
+      "wall_ms": 5676.25
+    },
+    {
+      "calls": 5.375,
+      "input_tokens": 2240.75,
+      "output_tokens": 110.0,
+      "runs": 8,
+      "success": 7,
+      "task": "settings_search",
+      "wall_ms": 7616.25
+    }
+  ]
+}

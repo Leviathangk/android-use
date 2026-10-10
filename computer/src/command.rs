@@ -30,6 +30,8 @@ pub enum Action {
     Android(AndroidAction),
     Browser(BrowserAction),
     Visual(VisualAction),
+    /// A read inside a chain, so look-act-check fits in one call; its output ends the result.
+    Look(CommandRead),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,6 +49,12 @@ pub enum AndroidAction {
     },
     /// Scroll the screen's main scrollable area, which is usually unlabeled.
     ScrollScreen(Direction),
+    /// Scroll an area (the main one when unnamed) until the text is on screen.
+    ScrollUntil {
+        direction: Direction,
+        target: Option<Target>,
+        text: Box<str>,
+    },
     Key(Key),
     WaitTarget {
         target: Target,
@@ -148,7 +156,7 @@ fn example(tokens: &[Lexeme]) -> &'static str {
     let word = |index: usize| tokens.get(index).and_then(Lexeme::word).unwrap_or("").to_ascii_lowercase();
     match (word(0).as_str(), word(1).as_str()) {
         ("type", _) => r#"type "TEXT" in "FIELD""#,
-        ("scroll", _) => r#"scroll down, or scroll down in "AREA""#,
+        ("scroll", _) => r#"scroll down, scroll down in "AREA", or scroll down until "TEXT""#,
         ("press", _) => "press back",
         ("wait", _) => r#"wait for text "TEXT" up to 5 seconds"#,
         ("verify", _) => r#"verify "LABEL" exists, or verify text "TEXT" exists"#,
@@ -343,7 +351,10 @@ fn parse_read_inner(input: &str) -> Result<CommandRead> {
     if parts.len() != 1 {
         return Err(Error::new(Code::Args, "read accepts one command at a time"));
     }
-    let t = &parts[0];
+    read_tokens(&parts[0])
+}
+
+fn read_tokens(t: &[Lexeme]) -> Result<CommandRead> {
     if t.len() == 1 && is_word(t, 0, "status") {
         return Ok(CommandRead::Status);
     }
@@ -430,6 +441,13 @@ fn parse_android_action(t: &[Lexeme]) -> Result<AndroidAction> {
     }
     if t.len() == 2 && is_word(t, 0, "scroll") {
         return Ok(AndroidAction::ScrollScreen(direction_word(&t[1])?));
+    }
+    if t.len() >= 4 && is_word(t, 0, "scroll") {
+        let direction = direction_word(&t[1])?;
+        let (target, next) = if is_word(t, 2, "in") { target_at(t, 3).map(|(target, next)| (Some(target), next))? } else { (None, 2) };
+        if next + 2 == t.len() && is_word(t, next, "until") {
+            return Ok(AndroidAction::ScrollUntil { direction, target, text: quoted_at(t, next + 1, "text")? });
+        }
     }
     if t.len() >= 4 && is_word(t, 0, "scroll") && is_word(t, 2, "in") {
         let direction = direction_word(&t[1])?;
@@ -645,7 +663,17 @@ fn parse_visual_action(t: &[Lexeme]) -> Result<VisualAction> {
     Err(Error::new(Code::Args, "unknown image action"))
 }
 
+/// First words of the reads that may sit inside an action chain. `page` alone and `page text` are
+/// reads; every other `page` form acts.
+fn is_look(t: &[Lexeme]) -> bool {
+    ["screen", "find", "status", "notifications", "location", "capabilities"].iter().any(|word| is_word(t, 0, word))
+        || (is_word(t, 0, "page") && (t.len() == 1 || is_word(t, 1, "text")))
+}
+
 fn parse_action(t: &[Lexeme]) -> Result<Action> {
+    if is_look(t) {
+        return Ok(Action::Look(read_tokens(t)?));
+    }
     if is_word(t, 0, "page") || is_word(t, 0, "select") || is_word(t, 0, "close") || is_word(t, 0, "new") {
         return Ok(Action::Browser(parse_browser_action(t)?));
     }
@@ -687,7 +715,7 @@ fn action_mutates(action: &Action) -> bool {
                 | AndroidAction::VerifyText(_)
         ),
         Action::Browser(value) => !matches!(value, BrowserAction::WaitText { .. } | BrowserAction::WaitCss { .. } | BrowserAction::Screenshot),
-        Action::Visual(_) => false,
+        Action::Visual(_) | Action::Look(_) => false,
     }
 }
 

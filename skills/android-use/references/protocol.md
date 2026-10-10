@@ -20,11 +20,12 @@ Join up to 16 steps with `then`. Quote names as `screen` shows them; `Name#2` is
 - tap "LABEL" [number N]
 - toggle "LABEL"
 - type "TEXT" in "FIELD"
-- scroll up|down|left|right [in "AREA"]
+- scroll up|down|left|right [in "AREA"] [until "TEXT"]
 - press back|home|recents|notifications|enter
 - open app "NAME"
 - open link "URL"
 - wait for text "TEXT" up to N seconds
+- then find "TEXT"|screen (a look ends the chain)
 - verify text "TEXT" exists
 - page open "URL" | page click "LABEL" | page type "TEXT" in "FIELD"
 - hold "LABEL"

@@ -106,6 +106,7 @@ mod flows {
                             "launch" => (screen, generation, changes) = ("settings", generation + 1, changes + 1),
                             "tap" | "tap_point" => (generation, changes) = (generation + 1, changes + 1),
                             "capture" => artifact = Some("a1"),
+                            "settle" => {}
                             "wait" => generation += 1, // The screen changes by itself.
                             "assert" => {
                                 let present = labels(screen).contains(&op[1][1][1].as_str().unwrap());

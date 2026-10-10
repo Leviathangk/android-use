@@ -44,8 +44,7 @@ On JDK 16+ the formatter needs `--add-exports=jdk.compiler/com.sun.tools.javac.<
 Live checks use one authorized device:
 
 ```console
-cargo xtask live
-cargo xtask stress-live
+cargo xtask benchmark-live
 ```
 
 Privacy-sensitive capture checks require explicit Android permission. Do not enable them merely to satisfy an unrelated test.

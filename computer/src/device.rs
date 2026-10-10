@@ -66,6 +66,22 @@ pub struct AdbDevice {
     pub state: Box<str>,
 }
 
+/// Picks the connected transport for an enrolled device. The enrolled endpoint wins when it still
+/// reports the enrolled serial. Otherwise exactly one matching transport is accepted; two or more
+/// (emulators and cloned devices can share a serial) are refused rather than guessed, so an action
+/// is never sent to the wrong device.
+fn choose_endpoint(binding: &Binding, connected: &[(Box<str>, Box<str>)]) -> Result<Box<str>> {
+    let same: Vec<_> = connected.iter().filter(|(_, hardware)| hardware.as_ref() == binding.hardware).collect();
+    if let Some((endpoint, _)) = same.iter().find(|(endpoint, _)| endpoint.as_ref() == binding.endpoint) {
+        return Ok(endpoint.clone());
+    }
+    match same.as_slice() {
+        [] => Err(Error::new(Code::Identity, "no connected transport matches the enrolled hardware serial")),
+        [(endpoint, _)] => Ok(endpoint.clone()),
+        _ => Err(Error::new(Code::Ambiguous, "more than one connected device reports the enrolled serial; run au enroll ENDPOINT for the one to use")),
+    }
+}
+
 impl Adb {
     #[cfg(test)]
     pub(crate) fn for_tests() -> Self {
@@ -133,24 +149,15 @@ impl Adb {
     pub fn resolve(&self, paths: &Paths) -> Result<Device> {
         let bytes = fs::read(&paths.device).map_err(|_| Error::new(Code::Identity, "no device is enrolled; run au enroll ENDPOINT"))?;
         let binding: Binding = serde_json::from_slice(&bytes).map_err(|_| Error::new(Code::Identity, "device binding is corrupt"))?;
-        let mut devices = self.devices()?;
-        devices.sort_by_key(|s| {
-            if !s.contains(':') {
-                0
-            } else if s.as_ref() == binding.endpoint {
-                1
-            } else {
-                2
-            }
-        });
-        for endpoint in devices {
+        let mut found = Vec::new();
+        for endpoint in self.devices()? {
             if let Ok(hardware) = self.hardware(&endpoint) {
-                if hardware.as_ref() == binding.hardware {
-                    return Ok(Device { endpoint, hardware });
-                }
+                found.push((endpoint, hardware));
             }
         }
-        Err(Error::new(Code::Identity, "no connected transport matches the enrolled hardware serial"))
+        let endpoint = choose_endpoint(&binding, &found)?;
+        let hardware = binding.hardware.clone().into_boxed_str();
+        Ok(Device { endpoint, hardware })
     }
     pub fn resolve_or_enroll(&self, paths: &Paths) -> Result<(Device, bool)> {
         if paths.device.is_file() {
@@ -173,6 +180,21 @@ impl Adb {
             }
         }
         Err(Error::new(Code::Identity, "device did not expose a hardware serial"))
+    }
+    /// Waits for Android to finish booting: a device that is already in the `device` state can
+    /// still be starting its services, and installing or enabling anything then fails oddly.
+    pub fn wait_boot_completed(&self, endpoint: &str, timeout: Duration) -> Result<()> {
+        let started = Instant::now();
+        loop {
+            let out = self.run(Some(endpoint), &["shell", "getprop", "sys.boot_completed"], Duration::from_secs(4)).unwrap_or_default();
+            if String::from_utf8_lossy(&out).trim() == "1" {
+                return Ok(());
+            }
+            if started.elapsed() >= timeout {
+                return Err(Error::new(Code::Device, "the device is still starting; wait for it to finish booting, then run au setup again"));
+            }
+            thread::sleep(Duration::from_millis(1000));
+        }
     }
     pub fn package_installed(&self, d: &Device, package: &str) -> Result<bool> {
         let out = self.run(Some(&d.endpoint), &["shell", "pm", "path", package], Duration::from_secs(5))?;
@@ -346,6 +368,23 @@ pub fn recover(path: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn binding() -> Binding {
+        Binding { hardware: "SER1".into(), endpoint: "emulator-5554".into() }
+    }
+
+    #[test]
+    fn a_shared_serial_is_never_guessed() {
+        let pair = |a: &str, b: &str| (Box::<str>::from(a), Box::<str>::from(b));
+        // The enrolled endpoint wins even when another transport reports the same serial.
+        assert_eq!(choose_endpoint(&binding(), &[pair("emulator-5556", "SER1"), pair("emulator-5554", "SER1")]).unwrap().as_ref(), "emulator-5554");
+        // Moved to another transport: one match is accepted, two are refused.
+        assert_eq!(choose_endpoint(&binding(), &[pair("10.0.0.5:5555", "SER1"), pair("other", "SER2")]).unwrap().as_ref(), "10.0.0.5:5555");
+        let error = choose_endpoint(&binding(), &[pair("emulator-5556", "SER1"), pair("emulator-5558", "SER1")]).unwrap_err();
+        assert_eq!(error.code, Code::Ambiguous);
+        assert_eq!(choose_endpoint(&binding(), &[pair("x", "SER2")]).unwrap_err().code, Code::Identity);
+    }
+
     #[test]
     fn paths_are_scoped() {
         let d = tempfile::tempdir().unwrap();

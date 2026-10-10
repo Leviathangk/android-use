@@ -30,7 +30,7 @@ npm run lint
 cargo xtask verify
 ```
 
-If you changed the Android helper, build it with `cargo xtask android` or `cargo xtask package` and run the real-device suite with `cargo xtask live`. Live-device tests must use a harmless fixture or test activity, finite capture durations, temporary artifact storage, and independent cleanup proof. Do not manipulate a personal app merely to demonstrate a feature.
+If you changed the Android helper, build it with `cargo xtask android` or `cargo xtask package` and run the real-device benchmark with `cargo xtask benchmark-live`. Live-device tests must use a harmless fixture or test activity, finite capture durations, temporary artifact storage, and independent cleanup proof. Do not manipulate a personal app merely to demonstrate a feature.
 
 ## Open a pull request
 

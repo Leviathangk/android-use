@@ -57,7 +57,7 @@ mod flows {
 
     fn labels(screen: &str) -> &'static [&'static str] {
         if screen == "settings" {
-            &["Wi-Fi", "Bluetooth", "Flaky"]
+            &["Wi-Fi", "Bluetooth", "Flaky", "Save draft", "Save and delete all"]
         } else {
             &["Settings"]
         }
@@ -75,7 +75,17 @@ mod flows {
                 "semantic" => json!([seq, 0, names.iter().map(|l| json!([l, "", "button", "", true, false])).collect::<Vec<_>>()]),
                 "resolve" => {
                     let wanted = q[2]["label"].as_str().unwrap().to_lowercase();
-                    json!([seq, 0, names.iter().enumerate().filter(|(_, l)| l.to_lowercase() == wanted).map(|(i, _)| i).collect::<Vec<_>>()])
+                    let hits = |loose: bool| {
+                        names
+                            .iter()
+                            .enumerate()
+                            .filter(|(_, l)| if loose { l.to_lowercase().contains(&wanted) } else { l.to_lowercase() == wanted })
+                            .map(|(i, _)| i)
+                            .collect::<Vec<_>>()
+                    };
+                    let exact = hits(false);
+                    let (refs, tier) = if exact.is_empty() { (hits(true), 2) } else { (exact, 0) };
+                    json!([seq, 0, {"r": refs, "t": tier, "l": refs.iter().map(|&i| names[i]).collect::<Vec<_>>()}])
                 }
                 "artifact" => {
                     let (start, end) = (q[3].as_u64().unwrap() as usize, q[4].as_u64().unwrap() as usize);
@@ -141,6 +151,19 @@ mod flows {
         (engine, dir)
     }
 
+    trait Words {
+        fn unwrap_err_or_text(self) -> String;
+    }
+
+    impl Words for Result<ModelResponse> {
+        fn unwrap_err_or_text(self) -> String {
+            match self {
+                Ok(response) => response.text,
+                Err(error) => error.message.to_string(),
+            }
+        }
+    }
+
     fn act(engine: &mut Engine, command: &str) -> Result<ModelResponse> {
         engine.model_act(&parse_act_command(command).unwrap(), None)
     }
@@ -149,7 +172,10 @@ mod flows {
     fn chains_across_screens_and_reports_the_screen_it_led_to() {
         let (mut engine, _dir) = engine();
         let response = act(&mut engine, r#"open app "Settings" then tap "Wi-Fi""#).unwrap();
-        assert_eq!(response.text, "Done. Opened Settings. Tapped Wi-Fi.\nNow on screen:\nWi-Fi — button\nBluetooth — button\nFlaky — button");
+        assert_eq!(
+            response.text,
+            "Done. Opened Settings. Tapped Wi-Fi.\nNow on screen:\nWi-Fi — button\nBluetooth — button\nFlaky — button\nSave draft — button\nSave and delete all — button"
+        );
     }
 
     #[test]
@@ -167,11 +193,28 @@ mod flows {
     }
 
     #[test]
+    fn a_containing_label_is_acted_on_only_when_plainly_meant() {
+        let (mut engine, _dir) = engine();
+        act(&mut engine, r#"open app "Settings""#).unwrap();
+        // One word-aligned, harmless match: acted on, and the result names what was tapped.
+        let done = act(&mut engine, r#"tap "Save draft""#).unwrap().text;
+        assert!(done.starts_with("Done. Tapped Save draft."), "{done}");
+        let near = act(&mut engine, r#"tap "draft""#).unwrap().text;
+        assert!(near.starts_with("Done. Tapped draft. (\"Save draft\" is the closest label to \"draft\".)"), "{near}");
+        let unsafe_guess = act(&mut engine, r#"tap "delete""#).unwrap_err_or_text();
+        assert!(unsafe_guess.contains("closest label is \"Save and delete all\", which was not tapped"), "{unsafe_guess}");
+        // Two containing labels are ambiguous, never guessed.
+        let two = act(&mut engine, r#"tap "Save""#).unwrap_err_or_text();
+        assert!(two.contains("matches 2 items"), "{two}");
+    }
+
+    #[test]
     fn a_failed_check_after_a_change_is_partial_and_names_the_step() {
         let (mut engine, _dir) = engine();
         let error = act(&mut engine, r#"open app "Settings" then verify "Bluetooth" is gone"#).err().unwrap();
         assert_eq!(error.code, Code::Partial);
-        assert!(error.message.contains(r#"step 2 of 2 (verify "Bluetooth" is gone)"#), "{}", error.message);
+        // The launch ran as its own plan, so the failed check is reported against the new screen.
+        assert!(error.message.starts_with("Partly done: Opened Settings.") && error.message.contains(r#"verify "Bluetooth" is gone"#), "{}", error.message);
     }
 
     #[test]

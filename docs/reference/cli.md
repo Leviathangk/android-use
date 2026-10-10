@@ -10,14 +10,11 @@ Run `au setup` once with one authorized, unlocked Android device. Use `au doctor
 | `au read COMMAND` | Same as the `android.read` tool, e.g. `au read screen`, `au read 'find "Wi-Fi"'`. |
 | `au act COMMAND` | Same as the `android.act` tool, e.g. `au act 'tap "Wi-Fi"'`. Images are saved and returned as a path. |
 | `au serve --mcp` | MCP server over stdio for agent clients. |
-| `au serve --jsonl` | JSON Lines over stdio (`{"tool":"android.read","arguments":{"command":"screen"}}`). |
 | `au devices` | List connected device endpoints and their states. |
 | `au enroll ENDPOINT` | Bind one connected hardware identity when several devices are attached. |
 | `au repair [APK]` / `au update [APK]` | Reinstall or update the helper. |
 | `au uninstall` | Remove the helper and Android Use's local state. |
 | `au version`, `au help` | Version and command list. |
-
-Legacy structured commands remain for compatibility: `au observe [BASE] [--detail]`, `au browser tabs|observe|text`, `au capabilities`, `au location`, `au notifications`, `au visual hash|diff`, `au act JSON` (an argument starting with `{`), and `au artifact ID [START END]`. New integrations should use `read` and `act`.
 
 ## Environment
 

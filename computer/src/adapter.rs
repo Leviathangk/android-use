@@ -1,5 +1,5 @@
 use crate::{
-    api::{parse_act_command, parse_read, parse_read_command, tool_schemas, BrowserPlan, BrowserRead, Code, Error, Plan, Read, Result, VisualPlan, VisualRead, MAX_FRAME},
+    api::{parse_act_command, parse_read_command, tool_schemas, Code, Error, Result, MAX_FRAME},
     engine::{plain_error, Engine, ModelResponse},
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -8,9 +8,6 @@ use std::io::{self, BufRead, BufReader, Write};
 
 pub fn mcp(mut engine: Engine) -> Result<()> {
     serve(move |v| rpc(&mut engine, v))
-}
-pub fn jsonl(mut engine: Engine) -> Result<()> {
-    serve(move |v| direct(&mut engine, v))
 }
 
 fn serve(mut handle: impl FnMut(Value) -> Option<Value>) -> Result<()> {
@@ -73,33 +70,15 @@ fn initialize(requested: Option<&str>) -> Value {
 fn call_tool(engine: &mut Engine, id: &Value, params: &Value) -> Value {
     let name = params.get("name").and_then(Value::as_str).unwrap_or("");
     let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
-    if args.get("command").is_some() {
-        // A resent JSON-RPC id maps to the same operation id, so the journal
-        // returns the earlier outcome (or `unknown`) instead of acting twice.
-        let identity = serde_json::to_string(id).unwrap_or_default();
-        return model_result(new_call(engine, name, args, Some(&identity)));
-    }
-    let (data, is_error) = match call(engine, name, args) {
-        Ok(data) => (data, false),
-        Err(error) => (error.json(), true),
-    };
-    json!({"structuredContent":data,"content":[{"type":"text","text":data.to_string()}],"isError":is_error})
-}
-
-fn direct(engine: &mut Engine, v: Value) -> Option<Value> {
-    let name = v.get("tool").and_then(Value::as_str).unwrap_or("").to_string();
-    let identity = v.get("id").map(|value| serde_json::to_string(value).unwrap_or_default());
-    let args = v.get("arguments").cloned().unwrap_or(v);
-    if args.get("command").is_some() {
-        Some(model_result(new_call(engine, &name, args, identity.as_deref())))
-    } else {
-        Some(call(engine, &name, args).unwrap_or_else(|e| e.json()))
-    }
+    // A resent JSON-RPC id maps to the same operation id, so the journal
+    // returns the earlier outcome (or `unknown`) instead of acting twice.
+    let identity = serde_json::to_string(id).unwrap_or_default();
+    model_result(new_call(engine, name, args, Some(&identity)))
 }
 
 fn new_call(engine: &mut Engine, name: &str, args: Value, request_identity: Option<&str>) -> Result<ModelResponse> {
     if args.as_object().is_none_or(|object| object.len() != 1 || !object.contains_key("command")) {
-        return Err(Error::new(Code::Args, "new tool calls accept only the command string"));
+        return Err(Error::new(Code::Args, "tool calls accept only the command string"));
     }
     let command = args.get("command").and_then(Value::as_str).ok_or_else(|| Error::new(Code::Args, "command must be a string"))?;
     match name {
@@ -123,16 +102,6 @@ fn model_json(response: &ModelResponse) -> Value {
     }
     json!({"content":content,"isError":response.failed})
 }
-fn call(engine: &mut Engine, name: &str, args: Value) -> Result<Value> {
-    match name {
-        "android.read" => engine.read(parse_read(args)?),
-        "android.act" if args.get("target").and_then(Value::as_str) == Some("browser") => engine.browser_act(BrowserPlan::parse(args)?),
-        "android.act" if args.get("target").and_then(Value::as_str) == Some("visual") => engine.visual_act(VisualPlan::parse(args)?),
-        "android.act" => engine.act(Plan::parse(args)?),
-        _ => Err(Error::new(Code::Args, "tool must be android.read or android.act")),
-    }
-}
-
 fn bounded_line<R: BufRead>(r: &mut R) -> Result<Option<Vec<u8>>> {
     let mut out = Vec::new();
     loop {
@@ -154,28 +123,6 @@ fn bounded_line<R: BufRead>(r: &mut R) -> Result<Option<Vec<u8>>> {
             return Ok(Some(out));
         }
     }
-}
-
-pub fn one_read(engine: &mut Engine, q: &str, base: Option<&str>, detail: u8, id: Option<&str>, range: Option<crate::api::Range>) -> Result<Value> {
-    let read = match q {
-        "status" => Read::Status,
-        "observe" => Read::Observe { base: base.map(Into::into), detail },
-        "browser" => Read::Browser {
-            op: match base.unwrap_or("observe") {
-                "tabs" => BrowserRead::Tabs,
-                "observe" => BrowserRead::Observe,
-                "text" => BrowserRead::Text,
-                _ => return Err(Error::new(Code::Args, "browser read must be tabs, observe, or text")),
-            },
-        },
-        "capabilities" => Read::Capabilities,
-        "location" => Read::Location,
-        "notifications" => Read::Notifications,
-        "visual" => Read::Visual(VisualRead::Hash(id.ok_or_else(|| Error::new(Code::Args, "visual hash requires an artifact id"))?.into())),
-        "artifact" => Read::Artifact { id: id.ok_or_else(|| Error::new(Code::Args, "artifact id is required"))?.into(), range },
-        _ => return Err(Error::new(Code::Args, "unknown read command")),
-    };
-    engine.read(read)
 }
 
 #[cfg(test)]
@@ -203,14 +150,6 @@ mod tests {
         assert_eq!(value["content"][1]["type"], "image");
         assert_eq!(value["content"][1]["mimeType"], "image/png");
         assert_eq!(value["isError"], false);
-    }
-
-    #[test]
-    fn legacy_call_shape_still_routes_separately() {
-        let value = tool_schemas();
-        assert_eq!(value.as_array().unwrap().iter().map(|tool| tool["name"].as_str().unwrap()).collect::<Vec<_>>(), vec!["android.read", "android.act"]);
-        assert!(parse_read(json!({"q":"status"})).is_ok());
-        assert!(parse_act_command("tap \"Save\"").is_ok());
     }
 
     fn request(engine: &mut Engine, value: Value) -> Value {

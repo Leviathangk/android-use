@@ -1,6 +1,6 @@
 # Security
 
-Android Use can observe and operate a physical device. Treat access to `au`, its MCP/JSONL process, the host account, and Android USB debugging as device-control authority.
+Android Use can observe and operate a physical device. Treat access to `au`, its MCP process, the host account, and Android USB debugging as device-control authority.
 
 ## Supported versions
 
@@ -49,6 +49,6 @@ Do not publish diagnostics without reviewing them. Do not place Android Use stat
 
 ## Authentication and remote use
 
-The helper issues fresh bootstrap credentials, authenticates once per command connection, and requires exact monotonically increasing request sequences. This protects the helper socket; it is not a user-account system for remotely exposed MCP or JSONL. Android Use does not ship a remote broker or multi-tenant authorization layer.
+The helper issues fresh bootstrap credentials, authenticates once per command connection, and requires exact monotonically increasing request sequences. This protects the helper socket; it is not a user-account system for a remotely exposed MCP server. Android Use does not ship a remote broker or multi-tenant authorization layer.
 
 Run `cargo xtask verify` for Rust and Java tests, the shared cross-language golden vector, source budgets, release builds, version consistency, documentation gates, and binary/APK size output.

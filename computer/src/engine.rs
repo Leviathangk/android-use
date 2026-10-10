@@ -1,18 +1,16 @@
 //! The execution core: device link, helper and Chrome connections, the
-//! at-most-once journal, and the structured read/act entry points that both
-//! the legacy JSON surface and the agent command layer (`agent.rs`) use.
+//! at-most-once journal, and the read and plan entry points the agent
+//! command layer (`agent.rs`) uses.
 use crate::{
     agent::AgentState,
-    api::{BrowserPlan, BrowserRead, Code, Error, Plan, Read, Receipt, Result, Scene, VisualOp, VisualPlan, VisualRead, MAX_INLINE},
+    api::{BrowserPlan, BrowserRead, Code, Error, Plan, Read, Receipt, Result, Scene},
     artifact::{valid, Artifacts, MAX_ARTIFACT},
     bridge::{Bridge, Observation},
     browser::{Browser, Outcome},
     device::{Adb, Device, Paths},
     format,
     journal::{unknown, Journal, ANDROID, BROWSER},
-    visual,
 };
-use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
@@ -145,7 +143,15 @@ impl Engine {
     pub fn read(&mut self, r: Read) -> Result<Value> {
         match r {
             Read::Status => {
-                let (g, cap) = self.bridge_read(|bridge| bridge.status())?;
+                let (mut g, mut cap) = self.bridge_read(|bridge| bridge.status())?;
+                // The service rebinds for a moment after an update or a settings change.
+                for _ in 0..4 {
+                    if cap != 0 {
+                        break;
+                    }
+                    std::thread::sleep(std::time::Duration::from_millis(600));
+                    (g, cap) = self.bridge_read(|bridge| bridge.status())?;
+                }
                 Ok(json!({"ok":1,"g":g,"cap":cap}))
             }
             Read::Observe { base, detail } => {
@@ -162,24 +168,10 @@ impl Engine {
                 self.scene = Some(scene);
                 Ok(out)
             }
-            Read::Artifact { id, range } if id.starts_with('h') => self.artifacts.read(&id, range),
-            Read::Artifact { id, range } => {
-                if !valid(&id) {
-                    return Err(Error::new(Code::Artifact, "invalid artifact id"));
-                }
-                if range.is_some_and(|r| r.end.saturating_sub(r.start) > MAX_INLINE as u64) {
-                    return Err(Error::new(Code::Bounds, "artifact range exceeds 2800 bytes"));
-                }
-                let (size, start, bytes) = self.bridge_read(|bridge| bridge.artifact(&id, range))?;
-                let end = start + bytes.len() as u64;
-                Ok(json!({"id":id,"size":size,"start":start,"data":STANDARD.encode(&bytes),"more":(end<size) as u8}))
-            }
             Read::Browser { op } => self.browser_read(|browser| browser.read(op.clone())).and_then(|page| self.journal.reconcile(BROWSER).map(|_| page)),
             Read::Capabilities => self.bridge_read(|bridge| bridge.query("capabilities", Value::Null)),
             Read::Location => self.bridge_read(|bridge| bridge.query("location", Value::Null)),
             Read::Notifications => self.bridge_read(|bridge| bridge.query("notifications", Value::Null)),
-            Read::Visual(VisualRead::Hash(id)) => visual::hash(&self.visual_bytes(&id)?),
-            Read::Visual(VisualRead::Diff(a, b)) => visual::diff(&self.visual_bytes(&a)?, &self.visual_bytes(&b)?),
         }
     }
 
@@ -205,13 +197,6 @@ impl Engine {
     /// legacy observes and Chrome reads itself); see `Journal::reconcile`.
     pub(crate) fn reconcile_outcomes(&mut self) -> Result<()> {
         self.journal.reconcile(ANDROID).map(|_| ())
-    }
-
-    pub fn act(&mut self, p: Plan) -> Result<Value> {
-        // The helper drops idle sessions; probe (and reconnect) before the
-        // journal records anything, so a dead socket is an error, not `unknown`.
-        self.bridge_read(|bridge| bridge.status())?;
-        to_value(self.run_plan(&p)?)
     }
 
     /// Runs a generation-checked Android plan at most once per id.
@@ -245,11 +230,6 @@ impl Engine {
         Ok(receipt)
     }
 
-    pub fn browser_act(&mut self, p: BrowserPlan) -> Result<Value> {
-        self.browser_read(|browser| browser.read(BrowserRead::Tabs))?;
-        to_value(self.run_browser_plan(&p, false)?)
-    }
-
     /// Runs a Chrome plan at most once per id. `prepared` plans were compiled
     /// against an observation taken moments ago, so the tab list is not
     /// re-synchronized before running them.
@@ -276,23 +256,6 @@ impl Engine {
         Ok(receipt)
     }
 
-    pub fn visual_act(&mut self, p: VisualPlan) -> Result<Value> {
-        // Cropping is local and repeatable, so do the fallible work before
-        // journaling; a failure then leaves no pending record behind.
-        let digest = self.digest(&p.wire(0), false)?;
-        let VisualOp::Crop { artifact, x, y, w, h } = &p.op;
-        let source = self.visual_bytes(artifact)?;
-        let cropped = self.artifacts.put(&visual::crop(&source, *x, *y, *w, *h)?)?;
-        if let Some(prior) = self.journal.begin(&p.id, p.generation, &digest, "")? {
-            return to_value(prior);
-        }
-        let receipt = Receipt { id: p.id.clone(), ok: 1, g: p.generation, m: 1, at: None, e: None, partial: None, next: None, artifact: Some(cropped) };
-        if self.journal.finish(&digest, &receipt).is_err() {
-            return to_value(unknown(&p.id, p.generation));
-        }
-        to_value(receipt)
-    }
-
     /// Plans are bound to the enrolled hardware so a replayed id can never
     /// match a record made for a different device.
     fn digest(&mut self, wire: &Value, device_bound: bool) -> Result<String> {
@@ -309,14 +272,6 @@ impl Engine {
             return Err(Error::new(Code::Artifact, "invalid artifact id"));
         }
         self.bridge_read(|bridge| bridge.download(id, MAX_ARTIFACT))
-    }
-
-    fn visual_bytes(&mut self, id: &str) -> Result<Vec<u8>> {
-        if id.starts_with('h') {
-            self.artifacts.bytes(id)
-        } else {
-            self.download(id)
-        }
     }
 
     pub(crate) fn operation_id(&mut self, request_identity: Option<&str>, kind: &str) -> String {
@@ -362,10 +317,6 @@ fn browser_receipt(id: &str, outcome: &Outcome, stored: Option<Result<Box<str>>>
         next: (outcome.error == Some("unknown")).then(|| "observe".into()),
         artifact: stored.and_then(Result::ok),
     }
-}
-
-fn to_value(receipt: Receipt) -> Result<Value> {
-    serde_json::to_value(receipt).map_err(|e| Error::new(Code::Protocol, e.to_string()))
 }
 
 pub(crate) fn hex(bytes: &[u8]) -> String {

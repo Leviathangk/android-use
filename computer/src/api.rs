@@ -105,12 +105,10 @@ pub enum Req {
 pub enum Read {
     Status,
     Observe { base: Option<Box<str>>, detail: u8 },
-    Artifact { id: Box<str>, range: Option<Range> },
     Browser { op: BrowserRead },
     Capabilities,
     Location,
     Notifications,
-    Visual(VisualRead),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -119,24 +117,6 @@ pub enum BrowserRead {
     Observe,
     Text,
     TextMatching(Box<str>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum VisualRead {
-    Hash(Box<str>),
-    Diff(Box<str>, Box<str>),
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub struct VisualPlan {
-    pub id: Box<str>,
-    pub generation: u64,
-    pub op: VisualOp,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum VisualOp {
-    Crop { artifact: Box<str>, x: u32, y: u32, w: u32, h: u32 },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -394,20 +374,6 @@ impl BrowserPlan {
     }
 }
 
-impl VisualPlan {
-    pub fn wire(&self, seq: u64) -> Value {
-        json!([seq, "visual", self.generation, self.id, self.op.wire()])
-    }
-}
-
-impl VisualOp {
-    fn wire(&self) -> Value {
-        match self {
-            Self::Crop { artifact, x, y, w, h } => json!(["crop", artifact, x, y, w, h]),
-        }
-    }
-}
-
 pub(crate) fn safe_setting(value: &str) -> bool {
     matches!(
         normalized(value).as_str(),
@@ -477,4 +443,3 @@ impl fmt::Display for Receipt {
 }
 
 pub use crate::command::{parse_act_command, parse_read_command, tool_schemas};
-pub use crate::legacy::parse_read;

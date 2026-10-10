@@ -122,7 +122,7 @@ Normal control stays between your computer and the connected device. Android sti
 | Let Codex, Claude Code, or Cursor use my Android device | [Agent Quickstart](docs/agents/quickstart.md) and [client setup](docs/agents/clients.md) |
 | Try commands myself | [Human Quickstart](docs/getting-started.md) |
 | Build an agent integration | [Agent protocol](docs/reference/agent-protocol.md) and [architecture](docs/concepts/architecture.md) |
-| Automate a repeatable task | [Examples](examples/README.md) and JSONL |
+| Automate a repeatable task | [Examples](examples/README.md) and the `au read` / `au act` commands |
 | Understand permissions and remote-control risk | [Security](SECURITY.md) |
 | Contribute to Android Use | [Development](docs/development.md) |
 

@@ -112,12 +112,19 @@ impl Bridge {
         Ok(self.stream.set_read_timeout(Some(timeout))?)
     }
     pub fn status(&mut self) -> Result<(u64, u32)> {
+        self.status_full().map(|(g, mask, _)| (g, mask))
+    }
+    /// Generation, capability mask, and the package of the active window (`None` from older
+    /// helpers, empty while no window is up).
+    pub fn status_full(&mut self) -> Result<(u64, u32, Option<String>)> {
         let a = self.call(|s| json!([s, "status"]))?;
         ok(&a)?;
-        if a.len() != 4 {
+        if !(4..=5).contains(&a.len()) {
             return Err(Error::new(Code::Protocol, "invalid status reply"));
         }
-        Ok((u64v(&a[2])?, u32::try_from(u64v(&a[3])?).map_err(|_| Error::new(Code::Protocol, "capability mask overflow"))?))
+        let mask = u32::try_from(u64v(&a[3])?).map_err(|_| Error::new(Code::Protocol, "capability mask overflow"))?;
+        let package = a.get(4).and_then(Value::as_str).filter(|p| p.len() <= 255).map(str::to_owned);
+        Ok((u64v(&a[2])?, mask, package))
     }
     pub fn observe(&mut self, base: Option<&str>, detail: u8) -> Result<Observation> {
         let a = self.call(|s| json!([s, "observe", base, detail]))?;

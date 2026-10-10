@@ -14,7 +14,7 @@ The supported release archives are Windows x86_64, macOS Apple Silicon, and Linu
 
 ## What is included
 
-- `au`: the local CLI, MCP server, and JSONL agent transport.
+- `au`: the local CLI and MCP server.
 - Compact semantic UI reading and generation-checked Android actions.
 - Supported Chrome/CDP controls, screenshots, and local private artifacts.
 - Optional camera, microphone, notification, location, and screen-recording capabilities when Android permission and device support are present.

@@ -82,7 +82,10 @@ final class Capture {
                         "camera_permission",
                         context.checkSelfPermission(Manifest.permission.CAMERA)
                                 == PackageManager.PERMISSION_GRANTED)
-                .put("microphone", context.getSystemService(Context.AUDIO_SERVICE) != null)
+                .put(
+                        "microphone",
+                        context.getPackageManager()
+                                .hasSystemFeature(PackageManager.FEATURE_MICROPHONE))
                 .put(
                         "microphone_permission",
                         context.checkSelfPermission(Manifest.permission.RECORD_AUDIO)

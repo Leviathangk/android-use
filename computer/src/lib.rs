@@ -13,6 +13,5 @@ pub mod engine;
 mod format;
 pub mod install;
 mod journal;
-mod legacy;
 mod resolve;
 pub mod visual;

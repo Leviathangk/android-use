@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Switch;
@@ -59,6 +60,33 @@ public final class MainActivity extends Activity {
                                 .setNegativeButton("CANCEL", null)
                                 .show());
         content.addView(dialog, matchWrap());
+
+        for (int number = 1; number <= 2; number++) {
+            Button details = new Button(this);
+            details.setText("Details");
+            int shown = number;
+            details.setOnClickListener(view -> state.setText("Details " + shown + " opened"));
+            content.addView(details, matchWrap());
+        }
+
+        Button draft = new Button(this);
+        draft.setText("Save draft");
+        draft.setOnClickListener(view -> state.setText("Saved draft"));
+        content.addView(draft, matchWrap());
+
+        Button slow = new Button(this);
+        slow.setText("LOAD SLOW CONTENT");
+        slow.setOnClickListener(
+                view -> {
+                    state.setText("Loading");
+                    state.postDelayed(() -> state.setText("Slow content ready"), 1500);
+                });
+        content.addView(slow, matchWrap());
+
+        ImageButton icon = new ImageButton(this);
+        icon.setImageResource(android.R.drawable.ic_menu_info_details);
+        icon.setOnClickListener(view -> state.setText("Icon tapped"));
+        content.addView(icon, matchWrap());
 
         state = new TextView(this);
         state.setText("Ready");

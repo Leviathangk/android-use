@@ -29,7 +29,7 @@ sequenceDiagram
 
 | Module | Responsibility |
 | --- | --- |
-| `adapter.rs` | MCP and JSONL over stdio: framing, lifecycle, tool routing. |
+| `adapter.rs` | MCP over stdio: framing, lifecycle, tool routing. |
 | `command.rs` | The plain command grammar and the MCP tool definitions. |
 | `agent.rs` | Agent-facing execution: compiles commands to plans, resolves labels, summarizes results and the screen afterwards. |
 | `resolve.rs` | One matching rule for every surface: exact beats substring, `number N` picks, otherwise ambiguous. |
@@ -40,14 +40,14 @@ sequenceDiagram
 | `device.rs` / `install.rs` | ADB discovery, enrollment, setup, and `doctor`. |
 | `compress.rs` | Content-aware screenshot compression and the image-to-device coordinate map. |
 | `visual.rs` / `artifact.rs` | PNG crop, hash, and diff; private local artifacts. |
-| `api.rs` / `legacy.rs` | Shared types and wire encoding; the deprecated structured JSON forms. |
+| `api.rs` | Shared types and wire encoding. |
 
 ## Safety invariants
 
 - **Generation checks.** Every plan carries the UI generation it was compiled against. The helper parses and bounds the whole plan, then checks the generation immediately before the first change and re-validates each later target (same window, bounds, and label) before acting on it, stopping at the first failure.
 - **At most once.** The host durably records a pending digest before sending a plan. If a process ends with a plan pending, new actions are refused as `unknown` until the agent reads the device, so the uncertain plan is never silently repeated. Operation ids are scoped to one process, so a client that restarts and reuses request ids cannot collide with older records.
 - **Bounded everything.** Frames, plans, waits, text, artifacts, and every response sent to an agent have hard limits.
-- **No escape hatches.** No shell, no arbitrary page JavaScript, an allowlist of settings screens, and HTTP(S)-only links. The helper has no `INTERNET` permission and only accepts the ADB shell user.
+- **No escape hatches.** No shell, no arbitrary page JavaScript, an allowlist of settings screens, and links limited to http(s), `geo:` and `google.navigation:`. The helper has no `INTERNET` permission and only accepts the ADB shell user.
 
 ## Speed
 

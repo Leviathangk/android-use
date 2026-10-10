@@ -2,7 +2,7 @@
 
 use au::{
     adapter,
-    api::{parse_act_command, parse_read_command, BrowserPlan, Code, Error, Plan, Range, Result, VisualPlan},
+    api::{parse_act_command, parse_read_command, Code, Error, Read, Result},
     engine::{plain_error, Engine, ModelResponse},
     install,
 };
@@ -37,35 +37,11 @@ fn run(human: bool) -> Result<Value> {
             let e = Engine::open()?;
             match a.get(1).map(String::as_str) {
                 Some("--mcp") => return adapter::mcp(e).map(|_| Value::Null),
-                Some("--jsonl") => return adapter::jsonl(e).map(|_| Value::Null),
-                _ => return Err(Error::new(Code::Args, "serve requires --mcp or --jsonl")),
+                _ => return Err(Error::new(Code::Args, "serve requires --mcp")),
             }
         }
-        "status" => adapter::one_read(&mut Engine::open()?, "status", None, 0, None, None)?,
+        "status" => Engine::open()?.read(Read::Status)?,
         "devices" => install::devices()?,
-        "observe" => {
-            let base = a.get(1).filter(|s| s.as_str() != "--detail").map(String::as_str);
-            let detail = u8::from(a.iter().any(|s| s == "--detail"));
-            adapter::one_read(&mut Engine::open()?, "observe", base, detail, None, None)?
-        }
-        "browser" => {
-            let op = a.get(1).map(String::as_str).unwrap_or("observe");
-            adapter::one_read(&mut Engine::open()?, "browser", Some(op), 0, None, None)?
-        }
-        "capabilities" | "location" | "notifications" => adapter::one_read(&mut Engine::open()?, a[0].as_str(), None, 0, None, None)?,
-        "visual" => {
-            let mut engine = Engine::open()?;
-            match a.get(1).map(String::as_str) {
-                Some("hash") => engine.read(au::api::Read::Visual(au::api::VisualRead::Hash(
-                    a.get(2).ok_or_else(|| Error::new(Code::Args, "visual hash requires an artifact id"))?.clone().into_boxed_str(),
-                )))?,
-                Some("diff") => engine.read(au::api::Read::Visual(au::api::VisualRead::Diff(
-                    a.get(2).ok_or_else(|| Error::new(Code::Args, "visual diff requires two artifact ids"))?.clone().into_boxed_str(),
-                    a.get(3).ok_or_else(|| Error::new(Code::Args, "visual diff requires two artifact ids"))?.clone().into_boxed_str(),
-                )))?,
-                _ => return Err(Error::new(Code::Args, "visual requires hash ID or diff ID ID")),
-            }
-        }
         "read" => {
             let mut engine = Engine::open()?;
             engine.load_image_space();
@@ -73,28 +49,13 @@ fn run(human: bool) -> Result<Value> {
             engine.save_image_space();
             model_value(&engine, response)?
         }
-        "act" if a.get(1).is_some_and(|raw| !raw.trim_start().starts_with('{')) => {
+        "act" => {
             let mut engine = Engine::open()?;
             engine.load_image_space();
             let response = parse_act_command(&a[1..].join(" ")).and_then(|actions| engine.model_act(&actions, None));
             engine.save_image_space(); // also on failure: a failed command may still have changed the screen
             let response = response.map_err(|e| Error::plain(e.code, plain_error(&e)))?;
             model_value(&engine, response)?
-        }
-        "act" => {
-            let raw = a.get(1).ok_or_else(|| Error::new(Code::Args, "act requires a command such as act 'tap \"Settings\"', or one legacy JSON plan"))?;
-            let v: Value = serde_json::from_str(raw)?;
-            let mut engine = Engine::open()?;
-            match v.get("target").and_then(Value::as_str) {
-                Some("browser") => engine.browser_act(BrowserPlan::parse(v)?)?,
-                Some("visual") => engine.visual_act(VisualPlan::parse(v)?)?,
-                _ => engine.act(Plan::parse(v)?)?,
-            }
-        }
-        "artifact" => {
-            let id = a.get(1).ok_or_else(|| Error::new(Code::Args, "artifact requires an id"))?;
-            let range = if a.len() == 4 { Some(Range { start: parse(&a[2])?, end: parse(&a[3])? }) } else { None };
-            adapter::one_read(&mut Engine::open()?, "artifact", None, 0, Some(id), range)?
         }
         "enroll" => install::enroll(a.get(1).ok_or_else(|| Error::new(Code::Args, "enroll requires an ADB endpoint"))?)?,
         "setup" | "repair" => install::setup(a.get(1).map(Path::new), human)?,
@@ -103,7 +64,7 @@ fn run(human: bool) -> Result<Value> {
         "uninstall" => install::uninstall()?,
         "version" | "--version" => serde_json::json!({"version":env!("CARGO_PKG_VERSION")}),
         "help" | "--help" | "-h" => {
-            serde_json::json!({"commands":["devices","setup [APK]","status","doctor","update [APK]","uninstall","enroll ENDPOINT","repair [APK]","serve --mcp|--jsonl","read COMMAND","act COMMAND","observe [BASE] [--detail]","browser tabs|observe|text","capabilities","location","notifications","visual hash|diff","act JSON","artifact ID [START END]"]})
+            serde_json::json!({"commands":["devices","setup [APK]","status","doctor","update [APK]","uninstall","enroll ENDPOINT","repair [APK]","serve --mcp","read COMMAND","act COMMAND"]})
         }
         _ => return Err(Error::new(Code::Args, format!("unknown command: {}", a[0]))),
     };
@@ -118,13 +79,9 @@ fn model_value(engine: &Engine, response: ModelResponse) -> Result<Value> {
     }
     Ok(value)
 }
-fn parse(s: &str) -> Result<u64> {
-    s.parse().map_err(|_| Error::new(Code::Args, "range values must be unsigned integers"))
-}
-
 fn human_value(command: &str, value: &Value) -> String {
     match command {
-        "help" | "--help" | "-h" => "Android Use — Give AI an Android device.\n\nGet connected:\n  au devices      List connected Android devices\n  au setup        Prepare and remember one device\n  au status       Check whether Android Use is ready\n  au doctor       Explain anything that needs attention\n\nUse the device (same commands as the MCP tools):\n  au read screen                 List what is on screen\n  au read 'find \"Wi-Fi\"'          Look for one item\n  au read page                   Read the current Chrome page\n  au act 'tap \"Settings\"'         Tap a visible label\n  au act 'open app \"Chrome\" then page open \"https://example.com\"'\n\nConnect an agent:\n  au serve --mcp   Model Context Protocol over stdio\n  au serve --jsonl Typed JSON Lines over stdio\n\nMaintenance:\n  au update       Update the Android helper\n  au uninstall    Remove Android Use and its local state\n\nRun `au help --json` for the complete machine-readable command list.".into(),
+        "help" | "--help" | "-h" => "Android Use — Give AI an Android device.\n\nGet connected:\n  au devices      List connected Android devices\n  au setup        Prepare and remember one device\n  au status       Check whether Android Use is ready\n  au doctor       Explain anything that needs attention\n\nUse the device (same commands as the MCP tools):\n  au read screen                 List what is on screen\n  au read 'find \"Wi-Fi\"'          Look for one item\n  au read page                   Read the current Chrome page\n  au act 'tap \"Settings\"'         Tap a visible label\n  au act 'open app \"Chrome\" then page open \"https://example.com\"'\n\nConnect an agent:\n  au serve --mcp   Model Context Protocol over stdio\n\nMaintenance:\n  au update       Update the Android helper\n  au uninstall    Remove Android Use and its local state\n\nRun `au help --json` for the complete machine-readable command list.".into(),
         "version" | "--version" => format!("Android Use {}", value.get("version").and_then(Value::as_str).unwrap_or(env!("CARGO_PKG_VERSION"))),
         "status" => match (value.get("ok").and_then(Value::as_u64) == Some(1), value.get("cap").and_then(Value::as_u64).unwrap_or(0) != 0) {
             (true, true) => "Android Use is ready\n\n✓ Android helper connected\n✓ Accessibility control is on".into(),

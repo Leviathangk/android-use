@@ -148,6 +148,7 @@ pub fn setup(apk: Option<&Path>, wait_for_approval: bool) -> Result<Value> {
     if !apk.is_file() {
         return Err(Error::new(Code::Args, "AU Bridge APK was not found"));
     }
+    adb.wait_boot_completed(&device.endpoint, std::time::Duration::from_secs(120))?;
     adb.install(&device, &apk)?;
     adb.start_helper(&device)?;
     let installed = adb.package_installed(&device, "dev.codex.aubridge")?;
@@ -249,6 +250,15 @@ pub fn doctor() -> Result<Value> {
         "browser".into(),
         json!({"state":if browser{"ready"}else{"optional"},"message":if browser{"Chrome is available"}else{"Optional: install Chrome for browser control"}}),
     );
+    // Installed and enabled is not the same as answering: a helper that crashes on start still
+    // shows both, so ask it something.
+    let answering = match (helper && accessibility, device.as_ref()) {
+        (true, Some(d)) => crate::bridge::Bridge::connect(adb.clone(), d.clone()).and_then(|mut bridge| bridge.status()).is_ok(),
+        _ => true,
+    };
+    if !answering {
+        checks.insert("bridge".into(), json!({"state":"attention","message":"The helper is installed but not answering; run au repair"}));
+    }
     let (phase, step) = if ready.is_empty() {
         if all.iter().any(|d| d.state.as_ref() == "unauthorized") {
             ("approve_usb", approve_usb_step())
@@ -265,10 +275,12 @@ pub fn doctor() -> Result<Value> {
         ("install_helper", install_helper_step())
     } else if !accessibility {
         ("enable_accessibility", enable_accessibility_step())
+    } else if !answering {
+        ("install_helper", install_helper_step())
     } else {
         ("ready", ready_step())
     };
-    let ready_all = enrolled && device.is_some() && helper && accessibility;
+    let ready_all = enrolled && device.is_some() && helper && accessibility && answering;
     Ok(json!({"ok":1,"ready":ready_all as u8,"phase":phase,"checks":checks,"devices":device_states,"next_step":step,"journal_bytes":journal_bytes}))
 }
 pub fn update(apk: Option<&Path>, wait_for_approval: bool) -> Result<Value> {

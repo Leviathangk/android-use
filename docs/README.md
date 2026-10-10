@@ -6,6 +6,7 @@ Start with the result you want.
 
 - [Human Quickstart](getting-started.md) — connect one device and reach the first successful observation.
 - [Agent Quickstart](agents/quickstart.md) — connect Codex, Claude Code, Cursor, or another MCP client.
+- [Client setup](agents/clients.md) — copy-paste MCP configuration for each client, and shell use without MCP.
 - [Agent installation and recovery](agents/install.md) — copy-paste setup, skill registration, host installation, and resumable Android guidance.
 - [Examples](../examples/README.md) — short, tested workflows.
 
@@ -19,7 +20,7 @@ Start with the result you want.
 
 ## Build and operate it
 
-- [Architecture](concepts/architecture.md)
+- [Architecture](concepts/architecture.md) — request flow, module map, and safety invariants.
 - [Security model](../SECURITY.md)
 - [Production guidance](production.md)
 - [Development](development.md)

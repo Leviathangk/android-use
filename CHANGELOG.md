@@ -1,5 +1,77 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- `notifications` always reported "no actionable notifications" because the host read the helper's notification object as an array. It now lists notifications by title and text, newest first.
+- `open notification`, `dismiss notification`, and `run notification action` sent the agent's label where the helper expects Android's internal notification key, so they could never succeed. Labels now resolve to keys by title or text, with `number N` for duplicates.
+- `location` and `capabilities` returned only field names ("available for lat, lon, …"). They now return the coordinates, accuracy, and age, and the readiness of each capability.
+- Operation ids were derived from JSON-RPC request ids, which restart in every client session, while the journal is durable. After a client restart, actions could fail with "operation id was already used". Ids are now salted per server process.
+- A label missing from the screen no longer lets later `then` steps run; the result says which steps did not run.
+- A failed verify, wait, or stale receipt stops the command instead of continuing with the next group of steps.
+- `au status` and `android.read status` reported ready while the Accessibility service was off.
+- `type "TEXT" in "FIELD"` could not find a filled text field by its hint. The helper now matches hints after exact text and descriptions.
+- Unknown MCP methods now return JSON-RPC `-32601`, and `ping` is answered.
+- Recordings and audio are no longer sent as MCP `image` content.
+- `page scroll` through the command grammar is now bounded to ±20,000 px, like the structured form.
+- A stale plan is recompiled and retried once, which is safe because `stale` proves nothing ran. When an earlier step already ran, results never advise retrying the whole command.
+- An image or file that cannot be fetched after an action succeeded no longer turns the result into an error, which could have led an agent to repeat the action.
+- Horizontal scrolls never page a vertical list. A horizontal scroll needs a view that offers one, and otherwise fails with a clear message.
+- Labels with brackets match as displayed (`Inbox 3` for `Inbox [3]`). A label with more than 16 matches reports ambiguity instead of a protocol error.
+- `verify` and `wait for` accept field hints, like the target resolver.
+- Legacy JSON `act` probes the helper connection before journaling, so an idle-closed socket is an error rather than a spurious `unknown`.
+- A journal holding only pending records evicts the oldest instead of refusing all new work.
+- A resent request id whose earlier attempt may have run is explained as such instead of reported as a malformed request.
+
+- Journal: a pending record left by a crashed process fences new actions as `unknown` until the agent reads the screen, instead of letting an uncertain action be repeated. Records are written in one write and a torn tail is removed on open, so a later record can no longer be glued onto a damaged one. Pending records are never evicted. The journal is locked and reloaded on every access, so the CLI and the MCP server can share it. Atomic replacement renames over the old file on Unix, so a crash cannot leave no journal at all.
+- An action whose outcome is lost is recorded as `unknown` rather than `nothing changed`, on Android and in Chrome. A Chrome click whose reply is lost is no longer reported as not applied, and creating or closing a tab that cannot be confirmed reports `unknown`.
+- Android: a plan that commits a step and then throws reports `partial`, not `nothing ran`.
+- Android: a label no longer targets the nearest control on screen when no control contains it. That fallback could tap an unrelated control such as a destructive button; now only a control containing the label's center is used.
+- Verify and wait checks match labels and hints the way targeting does. A ref check fails closed once the screen has changed, instead of checking whichever node now has that index.
+- Labels match across Unicode spaces (for example a non-breaking space before a colon) and a label truncated for display matches the item it names. Targeting and verification use one normalization on the host and the helper.
+- Notifications are listed and targeted by one label: the title, or the text when untitled. A number shown in the listing selects the same notification.
+- A partial result that stops at a missing label is reported as an error to MCP clients, not as success.
+- A command may take at most one photo, recording, or screen capture, since the helper returns one artifact per plan. A camera photo is no longer treated as the screen image, and cropping or comparing a photo reports a clear limit instead of a helper failure.
+- A screen image is never presented after a later change in the same command, and points are refused until the screen is captured again after any change. Coordinates from one image can no longer reach a changed screen.
+- Chrome tab lists count and show only pages, with an explicit note when more exist.
+- Screen compression classifies horizontally striped screens as detailed content, and 4K-class captures are no longer rejected for their pixel count.
+- Duplicated Android labels are ordered top to bottom, which matches the screen listing, so the number shown selects the same control.
+
+### Agent experience
+
+- Every successful action reports `Now on screen:` with the settled screen (or the page after `page` actions), so agents need far fewer separate reads.
+- Commands can chain across screens: in `open app "Settings" then tap "Wi-Fi"`, the steps before a label that is not yet visible run first as their own generation-checked plan, the UI settles, and the rest compiles against the new screen. Previously the whole command failed because "Wi-Fi" was not on the starting screen.
+- `au serve --mcp` starts without a connected device or adb. Problems become tool results with one concrete recovery step instead of a server that fails to start.
+- Errors now name the step that failed, whether anything changed, and the next safe move. Parse errors quote the failing step and suggest the canonical form for that verb.
+- MCP tool descriptions include the full grammar, the server sends `instructions` on `initialize`, and protocol versions 2025-06-18, 2025-03-26, and 2024-11-05 are negotiated.
+- New `au read COMMAND` and `au act COMMAND` give shell-only agents the same plain grammar. `au act` still accepts a legacy JSON plan.
+- New `scroll up|down|left|right` with no target scrolls the screen's main list, preferring areas that advertise that direction. `type … into …` is accepted.
+- Duplicate labels are shown as `Save (number 2) — button`, the exact form to send back.
+- Screen images go through a content-aware compression pipeline (`compress.rs`): classify the screen, resize to what a vision model keeps anyway, quantize to an indexed PNG (exact for screens with ≤256 colors), and meet a 350 KB budget by trimming colors then pixels. A synthetic 1080×2400 UI capture drops from 1.2 MB to about 20 KB in roughly 25 ms. `AU_IMAGE_MAX_EDGE` and `AU_IMAGE_BUDGET_KB` tune it.
+- The agent is told each image's size, scale, and the device size. `tap point` / `swipe` coordinates map through that record to the device pixel under the image pixel's center, the result confirms the pixel hit, and a point outside the image or a rotated screen gets a corrected-context message instead of a misplaced tap. The mapping persists across one-shot `au act` calls.
+- `image hash` / `image difference` compare full-resolution captures, so differently compressed screens still compare correctly.
+- The default `screen` summary is about 1,200 bytes instead of 480, so typical screens need one read.
+
+### Speed and reliability
+
+- Device artifacts download in 256 KiB slices instead of 2,800-byte slices: a full screenshot takes a handful of round trips instead of about a thousand. Hosts fall back automatically for older helpers.
+- Reconnecting to an already-running helper skips `am start-foreground-service`. The handshake retries until the service is listening instead of racing it.
+- Connection failures before dispatch are reported as errors instead of `unknown`, and no longer leave pending journal records.
+- Journal completion records are no longer force-flushed. Pending records still are, so at-most-once safety is unchanged and each action does one fewer full-disk flush.
+- The helper loads app labels once per app and caches the launcher list for 30 seconds.
+- Read-only Chrome calls reconnect only on transport errors, not on every failure.
+- The agent layer keeps a fixed set of named images instead of an ever-growing `image N` alias per capture.
+
+### Architecture and maintenance
+
+- `engine.rs` is split into `engine.rs` (execution core), `agent.rs` (agent-facing layer), `journal.rs`, `resolve.rs` (one matching rule for screens, pages, tabs, apps, and notifications), and a standalone `format.rs`. Legacy JSON parsing moved to `legacy.rs`.
+- Helper Java is formatted with google-java-format (AOSP style), with a CI check. Source budgets now measure formatted code: Android production 3,200 lines and authored code 13,000.
+- `cargo xtask size` now counts trailing `#[cfg(test)]` modules as tests, not production code.
+- `api_tests.rs` moved to `computer/tests/command_grammar.rs`. End-to-end agent flows run against a scripted fake helper that speaks the real wire protocol. A new fuzzer exercises the command grammar; the previous fuzz test only reached the JSON parser.
+- New docs: per-client MCP setup (`docs/agents/clients.md`), result semantics in the agent protocol, an architecture page with request flow and module map, and toolchain setup in development.
+- Removed the unused `Error::trace` field and `visual::Op`.
+
 ## 1.0.0 — 2026-08-14
 
 The first supported public release of Android Use.

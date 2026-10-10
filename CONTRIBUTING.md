@@ -13,6 +13,10 @@ Thanks for helping. Start with the [project guide](README.md) for the source lay
 
 New commands need tests for valid use, malformed input, timeouts, partial completion, and cleanup. If an operation changes device state, define the authoritative postcondition before implementation.
 
+## Code style
+
+Rust is formatted with `rustfmt` and must pass clippy with `-D warnings`. Helper Java is formatted with google-java-format in AOSP style (`--aosp`); CI rejects unformatted Java. Prefer small, named functions over dense one-line methods: the helper is a security boundary and should be easy to review. Source budgets in `cargo xtask size` measure formatted code.
+
 ## Run the checks
 
 From the repository root:

@@ -29,9 +29,9 @@ Report vulnerabilities privately through GitHub Security Advisories. Do not incl
 
 The normal product binds one enrolled hardware serial to a currently connected ADB transport. The Android service is startable only by the privileged `DUMP` caller, accepts abstract-local connections only from shell UID 2000, issues fresh bootstrap credentials, authenticates once per command connection, and requires exact monotonically increasing request sequences. It has no `INTERNET` permission.
 
-All frames, queues, workers, plans, strings, predicates, waits, mutations, scenes, artifacts, and inline responses are bounded. The helper parses and validates the complete plan before mutation, checks the expected UI generation immediately before the first mutation, executes only forward, and stops on the first failure. It caches final operation IDs for its lifecycle. The host fsyncs a pending digest before sending; an interrupted pending operation becomes `unknown` and is never automatically repeated.
+All frames, queues, workers, plans, strings, predicates, waits, mutations, scenes, artifacts, and inline responses are bounded. The helper parses and validates the complete plan before mutation, checks the expected UI generation immediately before the first mutation, executes only forward, and stops on the first failure. It keeps the last 128 final receipts until it restarts. The host durably records a pending digest before sending. If a process ends with an operation still pending, every new action is refused as `unknown` until the agent reads the screen, which settles the old outcome as unknown, so an uncertain action is never silently repeated. Operation ids for agent commands are salted per process, so a restarted client reusing request ids cannot replay an older record.
 
-The production Rust crate forbids unsafe code and exposes no model-accessible ADB or shell escape hatch. Media and expanded diagnostics return private artifact handles instead of transcript payloads. Credentials, device identity, private content, and Java exception details are not logged.
+The production Rust crate forbids unsafe code and exposes no model-accessible ADB or shell escape hatch. Screenshots and photos an agent explicitly requests are returned to the connected client as image content; audio, screen recordings, and expanded diagnostics stay in the private artifact folder and only their path or handle is returned. Credentials, device identity, private content, and Java exception details are not logged.
 
 ## Sensitive capabilities
 
@@ -41,7 +41,7 @@ Grant optional Android permissions only for the task that needs them. Require hu
 
 ## Data and persistence
 
-On Windows, state is stored under `%LOCALAPPDATA%\AndroidUse`; on macOS and Linux it uses the platform local data directory. It includes the enrolled device identity, an operation journal, and private artifacts. The journal stores bounded operation metadata and digests, not media payloads or raw UI dumps. Artifact contents remain local unless a connected client fetches and transmits them.
+On Windows, state is stored under `%LOCALAPPDATA%\AndroidUse`; on macOS and Linux under `$XDG_STATE_HOME/android-use`, defaulting to `~/.local/state/android-use`. `AU_HOME` overrides both. It includes the enrolled device identity, an operation journal, and private artifacts. The journal stores bounded operation metadata and digests, not media payloads or raw UI dumps. Artifact contents remain local unless a connected client fetches and transmits them.
 
 `au uninstall` removes the helper from the enrolled device and deletes Android Use's local enrolled-device file, journal, and artifact directory. It does not remove ADB itself or unrelated device data.
 

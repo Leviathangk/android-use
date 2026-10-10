@@ -94,18 +94,20 @@ The full fallback runbook and manual commands are in the [Agent installation and
 
 ## Connect an AI agent
 
-If your client supports MCP, configure it to run:
+Register `au serve --mcp` as a local MCP server, using the absolute path to `au`. For Claude Code:
 
-```console
-au serve --mcp
+```bash
+claude mcp add android-use --scope user -- /ABSOLUTE/PATH/TO/au serve --mcp
 ```
 
-The agent receives two focused tools:
+Codex, Cursor, VS Code, and Claude Desktop configs are in [client setup](docs/agents/clients.md). The agent receives two focused tools:
 
-- `android.read` sees what is happening.
-- `android.act` performs the next small action.
+- `android.read` sees what is happening: `screen`, `page`, `notifications`, ...
+- `android.act` performs the next small action: `tap "Wi-Fi"`, `type "hello" in "Message"`, ...
 
-Coding agents can start with [AGENTS.md](AGENTS.md). It contains the whole operating loop and recovery rules in one page. For Codex, Claude Code, Cursor, and similar clients, see the [Agent Quickstart](docs/agents/quickstart.md).
+Every successful action reports the screen it led to, so the agent spends its turns acting rather than re-reading. Agents without MCP can run the same commands in a shell: `au read screen`, `au act 'tap "Wi-Fi"'`.
+
+Coding agents can start with [AGENTS.md](AGENTS.md). It contains the whole operating loop and recovery rules in one page.
 
 ## How it works
 
@@ -117,9 +119,9 @@ Normal control stays between your computer and the connected device. Android sti
 
 | I want to… | Start here |
 | --- | --- |
-| Let Codex, Claude Code, or Cursor use my Android device | [Agent Quickstart](docs/agents/quickstart.md) |
+| Let Codex, Claude Code, or Cursor use my Android device | [Agent Quickstart](docs/agents/quickstart.md) and [client setup](docs/agents/clients.md) |
 | Try commands myself | [Human Quickstart](docs/getting-started.md) |
-| Build an agent integration | [Agent protocol](docs/reference/agent-protocol.md) |
+| Build an agent integration | [Agent protocol](docs/reference/agent-protocol.md) and [architecture](docs/concepts/architecture.md) |
 | Automate a repeatable task | [Examples](examples/README.md) and JSONL |
 | Understand permissions and remote-control risk | [Security](SECURITY.md) |
 | Contribute to Android Use | [Development](docs/development.md) |
@@ -128,7 +130,7 @@ Normal control stays between your computer and the connected device. Android sti
 
 <details><summary><strong>Does Android Use include an AI model?</strong></summary><br>No. It gives an agent a safe, compact Android interface. Bring the agent or application you already use.</details>
 
-<details><summary><strong>Does it work without screenshots?</strong></summary><br>Usually. Semantic UI is the preferred first read because it is smaller and identifies actionable controls. Use a screenshot when visual layout or imagery matters.</details>
+<details><summary><strong>Does it work without screenshots?</strong></summary><br>Usually. Semantic UI is the preferred first read because it is smaller and identifies actionable controls. When an app exposes little text or a label cannot be found, Android Use attaches a screenshot sized for vision models, and point taps on it are mapped back to exact device pixels.</details>
 
 <details><summary><strong>Does the phone need to be rooted?</strong></summary><br>No. Android Use relies on Android's normal debugging and user-granted accessibility or capability permissions.</details>
 
@@ -136,7 +138,7 @@ Normal control stays between your computer and the connected device. Android sti
 
 <details><summary><strong>Can I use Wi-Fi instead of USB?</strong></summary><br>The current product enrolls an ADB endpoint, but release onboarding and validation use USB. Treat wireless ADB as an advanced Android transport and secure it as carefully as physical debugging access.</details>
 
-<details><summary><strong>Where do captures and logs go?</strong></summary><br>Large captures are stored as local private artifacts. The operation journal stores bounded operation metadata, not screenshot or media contents. See <a href="SECURITY.md">Security</a> for paths, retention, and removal.</details>
+<details><summary><strong>Where do captures and logs go?</strong></summary><br>Large captures are stored as local private artifacts. The operation journal stores bounded operation metadata, not screenshot or media contents. Host artifacts are kept until <code>au uninstall</code> removes them. See <a href="SECURITY.md">Security</a> for paths and removal.</details>
 
 ## Project status
 

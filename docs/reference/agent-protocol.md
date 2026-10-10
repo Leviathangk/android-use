@@ -1,12 +1,31 @@
 # Agent protocol
 
-MCP advertises exactly two tools. Each new call has one required string argument, `command`:
+MCP advertises two tools. Each takes one string, `command`; the tool descriptions list the common commands.
 
-- `android.read` is non-mutating. Commands include `status`, `screen`, focused `screen matching "TEXT"` or `find "TEXT"`, `browser tabs`, `page`, `page text`, `page text matching "TEXT"`, `capabilities`, `location`, `notifications`, and image hash or difference.
-- `android.act` performs bounded actions such as `tap "TARGET"`, `toggle "TARGET"`, `type "TEXT" in "FIELD"`, `open app "DISPLAY NAME"`, `page click "TARGET"`, `wait for text "EXPECTED TEXT" up to 5 seconds`, and `verify text "EXPECTED TEXT" exists`.
+- `android.read` never changes the device: `status`, `screen`, `screen full`, `screen changes`, `find "TEXT"`, `page`, `page text matching "TEXT"`, `browser tabs`, `notifications`, `location`, `capabilities`.
+- `android.act` changes it: `tap "LABEL"`, `type "TEXT" in "FIELD"`, `scroll down`, `open app "NAME"`, `page click "LABEL"`, `wait for text "TEXT" up to 5 seconds`, `verify "LABEL" exists`. Join up to 16 changes with `then`.
 
-Use straight double quotes for variable text and `then` between short actions. The host owns state, target resolution, operation identity, safety limits, journals, artifacts, and image content. Do not construct generations, refs, package names, tab IDs, or JSON plans for normal calls.
+Quote labels exactly as `screen` shows them. A duplicated label is listed as `Save (number 2) — button`; send `tap "Save" number 2`. The host owns observation, targets, limits, and the journal. Never construct generations, refs, package names, or JSON plans.
 
-`stale` is safe to retry after a fresh read. `partial` means a mutation already ran. `unknown` means dispatch may have happened. Read and reconcile both before another mutation. A semantic miss may include a current screenshot; coordinates are a bounded fallback only while that screen remains current.
+## Results
 
-The old structured JSON forms remain accepted during deprecation for CLI, JSONL, MCP, and protocol-golden callers. They are compatibility-only and are not advertised by the new schemas. Full grammar and limits: [the installed protocol reference](../../skills/android-use/references/protocol.md).
+A successful Android action says what ran, then `Now on screen:` with the settled screen (or the page title and controls after a `page` action). Read again only when you need more detail. Chains may cross screens: a step whose label is not yet visible runs after the earlier steps settle.
+
+| Result | Meaning | Next move |
+| --- | --- | --- |
+| `Done. …` | Every step ran. | Continue from the screen shown. |
+| `No item labeled …` | Not on screen; that step and later ones did not run. | Use a listed label or the attached image. |
+| `… matches N items` | Ambiguous at that step; earlier chain steps ran. | Add `number N`. |
+| `The screen changed before anything ran` | `stale`. Nothing ran. | Retry the same command. |
+| `Check failed` / `Waited …` | A verify or wait was false. | Read, then decide. |
+| `Partly done` | Some steps changed the device, then one failed. | Read and reconcile. Never repeat the whole command. |
+| `uncertain` | `unknown`: it may have run. | Read before any other change. |
+| `missing the Android permission` | Android denied a capability. | Ask the user to grant it on the device. |
+
+## Images and coordinates
+
+When a screen exposes little text, or a label is missing, its image is attached, compressed for you (usually 20–200 KB); the text states its size and scale. `tap point X Y` and `swipe from X1 Y1 to X2 Y2 over MS milliseconds` use coordinates on that image, and the result confirms the device pixel hit. Points outside the image are refused. Any screen change ends the image: capture again before using points, and after rotating. Audio and video are saved to a file path.
+
+## Legacy JSON
+
+The structured JSON forms remain accepted for CLI, JSONL, and MCP callers that do not send `command`. They are deprecated and not advertised. Grammar summary: [installed protocol reference](../../skills/android-use/references/protocol.md).

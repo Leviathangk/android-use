@@ -8,7 +8,7 @@ Android Use returns a bounded semantic frontier with visible text, roles, state 
 
 ## Act on Android
 
-Plans support tap, long press, text entry, scroll, system keys, gestures, app launch, bounded waits, and assertions. Each plan names the UI generation it was built from. Stale plans fail before mutation.
+Commands support tap, long press, text entry, directional scroll (of a labeled area or the screen's main list), system keys, gestures, app launch by display name, bounded waits, and assertions. Each plan names the UI generation it was built from. Stale plans fail before mutation. A successful action returns the settled screen.
 
 ## Use Chrome
 
@@ -18,7 +18,7 @@ Chrome control can list and select tabs; observe page titles, text, and interact
 
 - Read location when the helper has location permission.
 - Read notifications after the user enables Android notification access.
-- Open, dismiss, or invoke one safely identifiable primary notification action.
+- List notifications by title and text, newest first, and open, dismiss, or invoke the primary action of one by its title (`open notification "TITLE"`).
 - Capture rear or front camera images after Android permission.
 - Capture bounded mono WAV audio after Android permission.
 - Capture a bounded MP4 screen recording after the user grants Android MediaProjection for that process.

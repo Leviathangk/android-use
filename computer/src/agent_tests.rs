@@ -172,10 +172,7 @@ mod flows {
     fn chains_across_screens_and_reports_the_screen_it_led_to() {
         let (mut engine, _dir) = engine();
         let response = act(&mut engine, r#"open app "Settings" then tap "Wi-Fi""#).unwrap();
-        assert_eq!(
-            response.text,
-            "Done. Opened Settings. Tapped Wi-Fi.\nNow on screen:\nWi-Fi — button\nBluetooth — button\nFlaky — button\nSave draft — button\nSave and delete all — button"
-        );
+        assert_eq!(response.text, "Done.\nNow on screen:\nWi-Fi\nBluetooth\nFlaky\nSave draft\nSave and delete all");
     }
 
     #[test]
@@ -183,7 +180,7 @@ mod flows {
         let (mut engine, _dir) = engine();
         let response = act(&mut engine, r#"tap "Wi-Fi" then tap "Settings""#).unwrap();
         assert!(response.text.starts_with(r#"No item labeled "Wi-Fi" is on the current screen. Nothing was run."#), "{}", response.text);
-        assert!(response.text.contains("On screen now:\nSettings — button"), "{}", response.text);
+        assert!(response.text.contains("On screen now:\nSettings"), "{}", response.text);
         // A resent request id gets its first reply, even though its label has gone since.
         let tap = parse_act_command(r#"tap "Settings""#).unwrap();
         let first = engine.model_act(&tap, Some("7")).unwrap().text;
@@ -198,14 +195,23 @@ mod flows {
         act(&mut engine, r#"open app "Settings""#).unwrap();
         // One word-aligned, harmless match: acted on, and the result names what was tapped.
         let done = act(&mut engine, r#"tap "Save draft""#).unwrap().text;
-        assert!(done.starts_with("Done. Tapped Save draft."), "{done}");
+        assert!(done.starts_with("Done.\n"), "{done}");
         let near = act(&mut engine, r#"tap "draft""#).unwrap().text;
-        assert!(near.starts_with("Done. Tapped draft. (\"Save draft\" is the closest label to \"draft\".)"), "{near}");
+        assert!(near.starts_with("Done. (\"Save draft\" is the closest label to \"draft\".)"), "{near}");
         let unsafe_guess = act(&mut engine, r#"tap "delete""#).unwrap_err_or_text();
         assert!(unsafe_guess.contains("closest label is \"Save and delete all\", which was not tapped"), "{unsafe_guess}");
         // Two containing labels are ambiguous, never guessed.
         let two = act(&mut engine, r#"tap "Save""#).unwrap_err_or_text();
         assert!(two.contains("matches 2 items"), "{two}");
+    }
+
+    #[test]
+    fn the_same_screen_after_an_action_is_reported_as_changes_not_listed_again() {
+        let (mut engine, _dir) = engine();
+        let first = act(&mut engine, r#"open app "Settings" then tap "Wi-Fi""#).unwrap().text;
+        assert!(first.contains("Now on screen:\nWi-Fi"), "a screen the agent has not seen is listed whole: {first}");
+        let again = act(&mut engine, r#"tap "Wi-Fi""#).unwrap().text;
+        assert_eq!(again, "Done.\nChanged:\nUnchanged.");
     }
 
     #[test]
@@ -309,7 +315,7 @@ mod flows {
     #[test]
     fn checks_that_pass_do_not_trigger_a_screen_summary() {
         let (mut engine, _dir) = engine();
-        assert_eq!(act(&mut engine, r#"verify "Settings" exists"#).unwrap().text, "Done. Verified Settings exists.");
+        assert_eq!(act(&mut engine, r#"verify "Settings" exists"#).unwrap().text, "Done.");
     }
 
     #[test]

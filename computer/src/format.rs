@@ -1,6 +1,6 @@
 //! Plain-language rendering for agents. Everything here is a pure function
 //! from device data to short, bounded text with no wire syntax in it.
-use crate::api::{normalized, Action, AndroidAction, BrowserAction, Code, Error, Node, Receipt, Result, Scene};
+use crate::api::{normalized, Action, AndroidAction, BrowserAction, Code, Error, Receipt, Result};
 use serde_json::Value;
 use std::collections::HashMap;
 
@@ -97,9 +97,63 @@ pub(crate) fn format_status(value: &Value) -> String {
 
 // ---- Android screen ------------------------------------------------------
 
-/// Renders compiled rows. Duplicate labels are annotated with the
-/// `number N` an agent must add to target them, in the same reading order
-/// the resolver uses.
+/// How many rows a screen read lists before pointing at `find`.
+const SCREEN_ROWS: usize = 64;
+const FULL_SCREEN_ROWS: usize = 256;
+
+/// Kind tags for controls that are not simply tapped; buttons and plain text have none.
+fn kind_tag(kind: &str) -> &'static str {
+    match kind {
+        "switch" => "sw ",
+        "text field" => "edit ",
+        "checkbox" => "chk ",
+        "radio" => "radio ",
+        "tab" => "tab ",
+        "link" => "link ",
+        "scroll area" => "list ",
+        "slider" => "slider ",
+        _ => "",
+    }
+}
+
+/// Whether a row's secondary text is short enough for the compact screen: a state or a value
+/// (`Off`, `T-Mobile`), not a descriptive subtitle, which `screen full` keeps.
+fn short_value(value: &str) -> bool {
+    value.chars().count() <= 28 && value.split_whitespace().count() <= 3 && !value.contains(',')
+}
+
+/// The number each row would need if it shares its label with another: `#N`, in reading order,
+/// the order the resolver counts in. Headings are never targets, and plain text is skipped when a
+/// control carries the same words (the resolver prefers the control), so a listed number is always
+/// one the resolver accepts.
+fn duplicate_numbers(rows: &[SemanticRow]) -> Vec<Option<usize>> {
+    let counted = |row: &SemanticRow, controls_exist: bool| row.kind != "heading" && (!controls_exist || !row.kind.is_empty());
+    let mut controls: HashMap<String, bool> = HashMap::new();
+    for row in rows.iter().filter(|row| !row.kind.is_empty() && row.kind != "heading") {
+        controls.insert(normalized(&row.label), true);
+    }
+    let mut counts: HashMap<String, usize> = HashMap::new();
+    for row in rows {
+        let key = normalized(&row.label);
+        if counted(row, controls.contains_key(&key)) {
+            *counts.entry(key).or_default() += 1;
+        }
+    }
+    let mut seen: HashMap<String, usize> = HashMap::new();
+    rows.iter()
+        .map(|row| {
+            let key = normalized(&row.label);
+            (counted(row, controls.contains_key(&key)) && counts.get(&key).copied().unwrap_or(0) > 1).then(|| {
+                let number = seen.entry(key).or_default();
+                *number += 1;
+                *number
+            })
+        })
+        .collect()
+}
+
+/// Renders compiled rows, one per line: `btn Save`, `sw Wi-Fi=on`, `edit Email="a@b.c"`, plain text as
+/// is, and `Label#2` where a label repeats (send `tap "Label" number 2`).
 pub(crate) fn format_semantic_rows(rows: &[SemanticRow], full: bool, focus: &str) -> String {
     if rows.is_empty() {
         return if focus.is_empty() {
@@ -108,49 +162,63 @@ pub(crate) fn format_semantic_rows(rows: &[SemanticRow], full: bool, focus: &str
             format!("Nothing on the screen matches {}. Read screen for the current view.", quoted(focus))
         };
     }
-    let mut counts: HashMap<String, usize> = HashMap::new();
-    for row in rows.iter().filter(|row| row.kind != "heading") {
-        *counts.entry(normalized(&row.label)).or_default() += 1;
-    }
-    let mut seen: HashMap<String, usize> = HashMap::new();
-    let mut lines = Vec::new();
-    for row in rows.iter().take(if full { 256 } else { 64 }) {
-        let line = semantic_line(row);
-        if line.is_empty() {
-            continue;
-        }
-        let key = normalized(&row.label);
-        if row.kind != "heading" && counts.get(&key).copied().unwrap_or(0) > 1 {
-            let number = seen.entry(key).or_default();
-            *number += 1;
-            let tag = format!(" (number {number})");
-            lines.push(if line.contains(" — ") { line.replacen(" — ", &format!("{tag} — "), 1) } else { line + &tag });
-        } else {
-            lines.push(line);
-        }
-    }
-    let omitted = rows.len().saturating_sub(lines.len());
-    let mut text = lines.join("\n");
+    let numbers = duplicate_numbers(rows);
+    let limit = if full { FULL_SCREEN_ROWS } else { SCREEN_ROWS };
+    let lines: Vec<String> = rows.iter().zip(&numbers).take(limit).map(|(row, number)| semantic_line(row, *number, full)).filter(|line| !line.is_empty()).collect();
+    let omitted = rows.len().saturating_sub(limit);
+    // The count comes first so cutting the body to its byte budget can never remove it.
+    let mut text = String::new();
     if omitted > 0 {
-        text.push_str(&format!("\n{omitted} more screen items were omitted."));
+        text.push_str(&format!("{omitted} more rows not shown; use find \"TEXT\"{}.\n", if full { "" } else { " or screen full" }));
     }
-    bounded_output_with_tail(
-        text,
-        if full { FULL_SCREEN_BYTES } else { SCREEN_BYTES },
-        if focus.is_empty() && full {
-            "\nSome controls were cut to fit; use find \"TEXT\" to locate one."
-        } else if focus.is_empty() {
-            "\nRead screen full for the complete control list."
-        } else {
-            "\nRead screen for a broader match."
-        },
-    )
+    text.push_str(&bounded_output_with_tail(lines.join("\n"), if full { FULL_SCREEN_BYTES } else { SCREEN_BYTES }, "\n… cut to fit; use find \"TEXT\"."));
+    text
 }
 
 /// Renders raw semantic rows from the helper as the agent sees `screen` (or `screen full`). Used by
 /// the token-budget gate and the golden-screen tools.
 pub fn render_screen(rows: &Value, full: bool) -> Result<String> {
     Ok(format_semantic_rows(&parse_semantic_rows(rows)?, full, ""))
+}
+
+/// What changed between two reads of what is plainly the same screen, as `+` added, `~` changed
+/// and `-` removed rows. `None` when the screen is a different one (under 60% of the rows carry
+/// over) or so much changed that listing it whole is shorter.
+pub(crate) fn screen_changes(previous: &[SemanticRow], current: &[SemanticRow]) -> Option<String> {
+    let key = |rows: &[SemanticRow]| {
+        let mut seen: HashMap<(String, String), usize> = HashMap::new();
+        rows.iter()
+            .map(|row| {
+                let nth = seen.entry((normalized(&row.label), row.kind.clone())).or_default();
+                *nth += 1;
+                (normalized(&row.label), row.kind.clone(), *nth)
+            })
+            .collect::<Vec<_>>()
+    };
+    let (before, after) = (key(previous), key(current));
+    let kept = after.iter().filter(|k| before.contains(k)).count();
+    if kept * 10 < previous.len().max(current.len()) * 6 {
+        return None;
+    }
+    let numbers = duplicate_numbers(current);
+    let mut lines = Vec::new();
+    for ((row, number), k) in current.iter().zip(&numbers).zip(&after) {
+        let marker = match before.iter().position(|b| b == k) {
+            None => "+",
+            Some(at) if previous[at] != *row => "~",
+            Some(_) => continue,
+        };
+        let line = semantic_line(row, *number, false);
+        if !line.is_empty() {
+            lines.push(format!("{marker} {line}"));
+        }
+    }
+    for (row, k) in previous.iter().zip(&before) {
+        if !after.contains(k) && !row.label.is_empty() {
+            lines.push(format!("- {}", display_n(&row.label, 64)));
+        }
+    }
+    (lines.len() <= 12).then(|| if lines.is_empty() { "Unchanged.".into() } else { lines.join("\n") })
 }
 
 pub(crate) fn semantic_delta(previous: &[SemanticRow], current: &[SemanticRow]) -> Vec<SemanticRow> {
@@ -161,106 +229,38 @@ pub(crate) fn format_semantic_delta(rows: &[SemanticRow]) -> String {
     if rows.is_empty() {
         return "No semantic screen changes.".into();
     }
-    let lines = rows.iter().map(semantic_line).filter(|line| !line.is_empty()).collect::<Vec<_>>();
+    let lines = rows.iter().map(|row| semantic_line(row, None, false)).filter(|line| !line.is_empty()).collect::<Vec<_>>();
     bounded_output_with_tail(lines.join("\n"), SCREEN_BYTES, "\nRead screen for the complete current state.")
 }
 
-/// `Label — value state kind`, e.g. `Wi-Fi — on switch` or `Name — empty text field`.
-pub(crate) fn semantic_line(row: &SemanticRow) -> String {
+/// One row as an agent reads it. The label is always verbatim, so it can be quoted back exactly.
+pub(crate) fn semantic_line(row: &SemanticRow, number: Option<usize>, full: bool) -> String {
     let label = display_n(&row.label, 96);
     if label.is_empty() || row.kind == "heading" {
         return label;
     }
-    let value = display_n(&row.value, 128);
+    let name = number.map_or_else(|| label.clone(), |n| format!("{label}#{n}"));
+    let tag = kind_tag(&row.kind);
+    let value = display_n(&row.value, if full { 128 } else { 40 });
     let state = display_n(&row.state, 32);
-    let mut parts: Vec<&str> = Vec::new();
-    match row.kind.as_str() {
-        "switch" => parts.push(if matches!(state.as_str(), "checked" | "on") { "on" } else { "off" }),
-        "checkbox" => parts.push(if state == "checked" { "checked" } else { "unchecked" }),
-        "radio" if row.selected || state == "checked" => parts.push("selected"),
-        "text field" => parts.push(if value.is_empty() { "empty" } else { value.as_str() }),
-        "tab" if row.selected => parts.push("selected"),
-        "radio" | "tab" => {}
-        _ if !value.is_empty() => parts.push(value.as_str()),
-        "slider" | "scroll area" | "button" | "link" => {}
-        _ if !state.is_empty() => parts.push(state.as_str()),
-        _ => {}
-    }
+    let on = |checked: bool| if checked { "on" } else { "off" };
+    let mut line = match row.kind.as_str() {
+        "switch" => format!("{tag}{name}={}", on(matches!(state.as_str(), "checked" | "on"))),
+        "checkbox" => format!("{tag}{name}={}", on(state == "checked")),
+        "radio" | "tab" => format!("{tag}{name}{}", if row.selected || state == "checked" { "=on" } else { "" }),
+        // A field showing its own hint ("Search" in an empty search box) is empty.
+        "text field" => format!("{tag}{name}=\"{}\"", if normalized(&value) == normalized(&label) { "" } else { value.as_str() }),
+        _ if !value.is_empty() && (full || short_value(&value)) => format!("{tag}{name}: {value}"),
+        _ if row.kind.is_empty() && !state.is_empty() && state != "selected" => format!("{name}: {state}"),
+        _ => format!("{tag}{name}"),
+    };
     if !row.enabled {
-        parts.push("disabled");
+        line.push_str(" [disabled]");
     }
-    let generic = !matches!(row.kind.as_str(), "switch" | "checkbox" | "radio" | "text field" | "slider" | "scroll area" | "tab" | "button" | "link");
-    if generic && row.selected {
-        parts.push("selected");
+    if row.selected && !matches!(row.kind.as_str(), "radio" | "tab") {
+        line.push_str(" [selected]");
     }
-    match row.kind.as_str() {
-        "radio" => parts.push("option"),
-        kind if !generic => parts.push(kind),
-        _ => {}
-    }
-    if parts.is_empty() {
-        label
-    } else {
-        format!("{label} — {}", parts.join(" "))
-    }
-}
-
-fn role_name(role: u8) -> &'static str {
-    match role as char {
-        'b' => "button",
-        'i' => "text field",
-        'c' => "checkbox",
-        's' => "scroll area",
-        'm' => "control",
-        't' => "text",
-        'a' => "link",
-        _ => "item",
-    }
-}
-
-fn display_node_label(value: &str) -> String {
-    match value.split_once(":id/") {
-        Some((_, tail)) => display_n(&tail.replace(['_', '-'], " "), 96),
-        None => display_n(value, 96),
-    }
-}
-
-fn actionable_node(node: &Node) -> bool {
-    !node.label.contains(":id/") || node.role as char != 't' || node.flags & 1 != 0
-}
-
-/// Raw-scene rendering for helpers without the semantic compiler.
-pub(crate) fn format_scene(scene: &Scene, full: bool) -> String {
-    let useful: Vec<_> = scene.nodes.iter().filter(|node| !node.label.is_empty() && actionable_node(node)).collect();
-    if useful.is_empty() {
-        return "The screen has no readable controls. Read screen again after the view changes, or capture screen to see it.".into();
-    }
-    let limit = if full { 256 } else { 40 };
-    let mut lines = Vec::new();
-    for node in useful.iter().take(limit) {
-        let state = match node.role as char {
-            'c' if node.flags & 4 != 0 => "checked",
-            'c' => "unchecked",
-            _ if node.flags & 2 == 0 => "disabled",
-            _ => "",
-        };
-        let detail = [state, role_name(node.role)].iter().filter(|part| !part.is_empty()).copied().collect::<Vec<_>>().join(" ");
-        lines.push(format!("{} — {detail}", display_node_label(&node.label)));
-    }
-    if useful.len() > limit {
-        lines.push(format!("{} more controls were omitted.", useful.len() - limit));
-    }
-    bounded_output_with_tail(lines.join("\n"), if full { FULL_SCREEN_BYTES } else { SCREEN_BYTES }, "\nRead screen full for the complete control list.")
-}
-
-pub(crate) fn format_scene_focus(scene: &Scene, full: bool, matching: Option<&str>) -> String {
-    let Some(matching) = matching.filter(|value| !value.trim().is_empty()) else { return format_scene(scene, full) };
-    let needle = normalized(matching);
-    let nodes: Vec<_> = scene.nodes.iter().filter(|node| crate::resolve::semantic_labels(&node.label).iter().any(|label| label.contains(&needle))).cloned().collect();
-    if nodes.is_empty() {
-        return format!("Nothing on the screen matches {}. Read screen for the current view.", quoted(matching));
-    }
-    format_scene(&Scene { nodes: nodes.into_boxed_slice(), ..scene.clone() }, full)
+    line
 }
 
 // ---- Chrome ---------------------------------------------------------------
@@ -278,6 +278,17 @@ pub(crate) fn format_browser_tabs(value: &Value) -> String {
     bounded_output(format!("Chrome has {} tabs: {}{more}.{truncated}", pages.len(), names.join("; ")), 640)
 }
 
+/// Page controls use the same tags as the Android screen.
+fn role_tag(role: u8) -> &'static str {
+    match role as char {
+        'i' => "edit ",
+        'c' => "chk ",
+        's' => "list ",
+        'a' => "link ",
+        _ => "",
+    }
+}
+
 pub(crate) fn format_browser_page(value: &Value) -> String {
     let title = display_n(value.get("title").and_then(Value::as_str).filter(|t| !t.is_empty()).unwrap_or("untitled"), 96);
     let host = value.get("url").and_then(Value::as_str).and_then(|url| url.split("://").nth(1)).and_then(|rest| rest.split('/').next()).unwrap_or("");
@@ -288,15 +299,15 @@ pub(crate) fn format_browser_page(value: &Value) -> String {
             let row = row.as_array()?;
             let label = row.get(1).and_then(Value::as_str).filter(|label| !label.trim().is_empty())?;
             let role = row.get(2).and_then(Value::as_str).and_then(|s| s.as_bytes().first().copied()).unwrap_or(b'm');
-            Some(format!("{} {}", display_n(label, 72), role_name(role)))
+            Some(format!("{}{}", role_tag(role), display_n(label, 72)))
         })
         .take(30)
         .collect();
-    let page = if host.is_empty() { format!("The current page is {title}.") } else { format!("The current page is {title} ({}).", display_n(host, 64)) };
+    let page = if host.is_empty() { title } else { format!("{title} ({})", display_n(host, 64)) };
     if controls.is_empty() {
-        format!("{page} It has no readable controls; read page text for its content.")
+        format!("Page: {page}. No readable controls; use page text for its content.")
     } else {
-        bounded_output_with_tail(format!("{page} Controls: {}.", controls.join("; ")), SCREEN_BYTES, " Read page text for the page content.")
+        bounded_output_with_tail(format!("Page: {page}\n{}", controls.join("\n")), SCREEN_BYTES, "\n… cut to fit; use page text.")
     }
 }
 
@@ -655,24 +666,6 @@ mod tests {
 
     #[test]
     fn model_text_is_plain_and_bounded() {
-        let scene = Scene {
-            observation: "1".into(),
-            generation: 1,
-            package: "fixture".into(),
-            nodes: vec![
-                Node { id: 0, label: "Save".into(), role: b'b', flags: 3 },
-                Node { id: 1, label: "Name".into(), role: b'i', flags: 2 },
-                Node { id: 2, label: "com.android:id/internal_text".into(), role: b't', flags: 2 },
-                Node { id: 3, label: "com.android:id/submit_button".into(), role: b'b', flags: 3 },
-            ]
-            .into_boxed_slice(),
-        };
-        let text = format_scene(&scene, false);
-        assert!(!text.contains(['{', '}', '[', ']']));
-        assert!(!text.contains("com.android"));
-        assert!(text.contains("submit button"));
-        assert!(text.len() <= SCREEN_BYTES);
-
         let actions = vec![
             Action::Android(AndroidAction::Type { text: "Sample text".into(), target: Target { label: "Name".into(), ordinal: None } }),
             Action::Android(AndroidAction::Tap(Target { label: "Save".into(), ordinal: None })),
@@ -685,8 +678,59 @@ mod tests {
     fn duplicate_rows_show_the_number_an_agent_must_use() {
         let rows = [row("Settings", "heading", "", ""), row("Save", "button", "", ""), row("Wi-Fi", "switch", "", "checked"), row("Save", "button", "", "")];
         let text = format_semantic_rows(&rows, false, "");
-        assert_eq!(text, "Settings\nSave (number 1) — button\nWi-Fi — on switch\nSave (number 2) — button");
-        assert_eq!(semantic_line(&row("Name", "text field", "", "")), "Name — empty text field");
+        assert_eq!(text, "Settings\nSave#1\nsw Wi-Fi=on\nSave#2");
+        assert_eq!(semantic_line(&row("Name", "text field", "", ""), None, false), "edit Name=\"\"");
+    }
+
+    #[test]
+    fn rows_are_dense_but_labels_stay_verbatim() {
+        let mut off = row("Alarm", "switch", "", "unchecked");
+        off.enabled = false;
+        let lines: Vec<_> = [
+            row("Internet", "", "AndroidWifi", ""),
+            row("Network", "control", "Mobile, Wi‑Fi, hotspot", ""),
+            row("Email", "text field", "a@b.co", ""),
+            off,
+            row("List", "scroll area", "", ""),
+        ]
+        .iter()
+        .map(|r| semantic_line(r, None, false))
+        .collect();
+        assert_eq!(lines, ["Internet: AndroidWifi", "Network", "edit Email=\"a@b.co\"", "sw Alarm=off [disabled]", "list List"]);
+        assert_eq!(semantic_line(&row("Network", "control", "Mobile, Wi‑Fi, hotspot", ""), None, true), "Network: Mobile, Wi‑Fi, hotspot", "full keeps subtitles");
+    }
+
+    #[test]
+    fn a_change_on_the_same_screen_is_a_diff_and_a_new_screen_is_not() {
+        let before = [
+            row("Settings", "heading", "", ""),
+            row("Wi-Fi", "switch", "", "checked"),
+            row("Bluetooth", "switch", "", "unchecked"),
+            row("Saved", "", "", ""),
+            row("More", "button", "", ""),
+        ];
+        let mut after = before.to_vec();
+        after[1] = row("Wi-Fi", "switch", "", "unchecked");
+        after.remove(3);
+        after.push(row("Done", "", "", ""));
+        assert_eq!(screen_changes(&before, &after).unwrap(), "~ sw Wi-Fi=off\n+ Done\n- Saved");
+        assert_eq!(screen_changes(&before, &before).unwrap(), "Unchanged.");
+        let other = [row("Network", "heading", "", ""), row("Internet", "button", "", ""), row("VPN", "button", "", "")];
+        assert!(screen_changes(&before, &other).is_none(), "a different screen is listed whole");
+    }
+
+    #[test]
+    fn numbers_skip_plain_text_that_shares_words_with_a_control() {
+        let rows = [row("Battery Saver", "", "", ""), row("Battery Saver", "switch", "", "checked"), row("Save", "button", "", ""), row("Save", "button", "", "")];
+        let text = format_semantic_rows(&rows, false, "");
+        assert_eq!(text, "Battery Saver\nsw Battery Saver=on\nSave#1\nSave#2");
+    }
+
+    #[test]
+    fn omitted_rows_are_counted_before_the_body_so_truncation_keeps_the_count() {
+        let rows: Vec<_> = (0..90).map(|i| row(&format!("Item {i}"), "button", "", "")).collect();
+        let text = format_semantic_rows(&rows, false, "");
+        assert!(text.starts_with("26 more rows not shown; use find"), "{text}");
     }
 
     #[test]

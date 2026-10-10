@@ -89,6 +89,9 @@ enum Surface {
 /// The result of one run of consecutive same-surface actions.
 struct Step {
     text: String,
+    /// Bytes of `text` that only restate what was asked ("Tapped Save."); a fully successful
+    /// command leaves them out and says just "Done." plus whatever follows.
+    echo: usize,
     image: Option<ModelImage>,
     changed: Option<Surface>,
 }
@@ -129,16 +132,7 @@ impl Engine {
 
     fn read_screen(&mut self, full: bool, matching: Option<&str>, delta: bool) -> Result<ModelResponse> {
         let focus = matching.unwrap_or("");
-        let rows = match self.semantic_rows(focus) {
-            Ok(rows) => rows,
-            // Helpers without the semantic compiler only expose the raw scene.
-            Err(error) if error.code == Code::Unsupported => {
-                self.read(Read::Observe { base: None, detail: u8::from(full) })?;
-                let scene = self.scene.clone().ok_or_else(|| Error::new(Code::Protocol, "the Android scene was unavailable"))?;
-                return Ok(ModelResponse { text: format_scene_focus(&scene, full, matching), image: None, failed: false });
-            }
-            Err(error) => return Err(error),
-        };
+        let rows = self.semantic_rows(focus)?;
         let previous = if focus.is_empty() { self.agent.snapshot.replace(rows.clone()) } else { None };
         let mut text = match (delta, previous) {
             (true, Some(previous)) => format_semantic_delta(&semantic_delta(&previous, &rows)),
@@ -186,7 +180,7 @@ impl Engine {
             let step = describe_action(&actions[change]);
             return Err(Error::plain(Code::Bounds, format!("The screen image predates {step}: capture screen again after {step}, then tap point; nothing was run.")));
         }
-        let (mut done, mut image, mut changed) = (Vec::new(), None, None);
+        let (mut done, mut notes, mut image, mut changed) = (Vec::new(), Vec::new(), None, None);
         // Group indexes of the last image and the last screen change, so an image that predates a
         // later change is never presented as the current screen.
         let (mut image_at, mut last_change) = (None, None);
@@ -203,6 +197,7 @@ impl Engine {
             };
             match result {
                 Ok((step, consumed)) => {
+                    notes.push(step.text[step.echo..].trim().to_owned());
                     done.push(step.text);
                     if step.image.is_some() {
                         image = step.image;
@@ -236,7 +231,7 @@ impl Engine {
                 Err(error) => return Err(error),
             }
         }
-        let mut text = bounded_output(format!("Done. {}", completed(&done)), 640);
+        let mut text = bounded_output(format!("Done. {}", notes.iter().filter(|note| !note.is_empty()).cloned().collect::<Vec<_>>().join(" ")).trim_end().to_owned(), 640);
         if let (Some(shot), Some(change)) = (image_at, last_change) {
             if shot < change {
                 image = None;
@@ -258,12 +253,15 @@ impl Engine {
         let mut text = if done.is_empty() { String::new() } else { format!("Partly done: {} ", completed(done)) };
         text.push_str(&display(&error.message));
         text.push_str(if done.is_empty() { ". Nothing was run." } else { ". The remaining steps were not run." });
+        // The image costs far more than the text: attach it only when the text says little.
+        let mut readable = 0;
         if let Ok(rows) = self.semantic_rows("") {
+            readable = rows.iter().filter(|row| row.kind != "heading").count();
             text.push_str("\nOn screen now:\n");
             text.push_str(&format_semantic_rows(&rows, false, ""));
             self.agent.snapshot = Some(rows);
         }
-        let image = self.capture_screen_for_model().map(|(shot, note)| {
+        let image = (readable <= 2).then(|| self.capture_screen_for_model()).flatten().map(|(shot, note)| {
             text.push_str("\nThe screen image is attached; use tap point X Y on it only if no listed label works. ");
             text.push_str(&note);
             shot
@@ -284,9 +282,15 @@ impl Engine {
                     self.settle();
                     rows = self.semantic_rows("").ok()?;
                 }
-                let text = format_semantic_rows(&rows, false, "");
+                // The agent has seen the last screen, so on the same screen only the changes are
+                // sent; a different screen is sent whole.
+                let changes = self.agent.snapshot.as_deref().and_then(|before| screen_changes(before, &rows));
+                let text = match changes {
+                    Some(changes) => format!("Changed:\n{changes}"),
+                    None => format!("Now on screen:\n{}", format_semantic_rows(&rows, false, "")),
+                };
                 self.agent.snapshot = Some(rows);
-                Some(format!("Now on screen:\n{text}"))
+                Some(text)
             }
             Surface::Browser => self.read_page().ok().map(|page| format!("Now: {}", format_browser_page(&page))),
         }
@@ -399,40 +403,41 @@ impl Engine {
             return Err(Error::plain(receipt_code(receipt), failure_text(receipt, actions)));
         }
         let mut text = success_text(actions);
+        let echo = text.len();
         let mapped = std::mem::take(&mut self.agent.mapping);
         if !mapped.is_empty() {
             text.push_str(&format!(" ({}.)", mapped.join("; ")));
         }
         let changed = (receipt.m > 0 && actions.iter().any(|action| !is_media(action))).then_some(Surface::Android);
-        let Some(artifact) = receipt.artifact.as_deref() else { return Ok(Step { text, image: None, changed }) };
+        let Some(artifact) = receipt.artifact.as_deref() else { return Ok(Step { text, echo, image: None, changed }) };
         // The action has already happened; a failed fetch must not read as a
         // failed action, or the agent would repeat it.
         let Ok(bytes) = self.download(artifact) else {
             text.push_str(UNFETCHED);
-            return Ok(Step { text, image: None, changed });
+            return Ok(Step { text, echo, image: None, changed });
         };
         let mime = mime_type(&bytes);
         if let Some(at) = actions.iter().position(|action| matches!(action, Action::Android(AndroidAction::CaptureScreen))).filter(|_| mime == "image/png") {
             if actions[at + 1..].iter().any(changes_screen) {
                 text.push_str(" The screen image predates the later steps' change, so it was left out; capture screen again to see the screen now.");
-                return Ok(Step { text, image: None, changed });
+                return Ok(Step { text, echo, image: None, changed });
             }
             let (image, note) = self.present_screen(bytes);
             text.push_str(" The screen image is attached. ");
             text.push_str(&note);
-            return Ok(Step { text, image: Some(image), changed });
+            return Ok(Step { text, echo, image: Some(image), changed });
         }
         if mime.starts_with("image/") {
             // A photo is not the screen: its pixels must never be read as screen coordinates.
             self.agent.space = None;
             text.push_str(" The image is attached.");
-            return Ok(Step { text, image: Some(ModelImage { bytes: self.remember("photo", bytes), mime_type: mime }), changed });
+            return Ok(Step { text, echo, image: Some(ModelImage { bytes: self.remember("photo", bytes), mime_type: mime }), changed });
         }
         match self.export(&bytes) {
             Ok(path) => text.push_str(&format!(" Saved the {} on this computer at {}.", if mime.starts_with("audio/") { "audio" } else { "recording" }, path.display())),
             Err(_) => text.push_str(UNFETCHED),
         }
-        Ok(Step { text, image: None, changed })
+        Ok(Step { text, echo, image: None, changed })
     }
 
     fn compile_android(&mut self, action: &AndroidAction, scene: &Scene) -> Result<Op> {
@@ -582,17 +587,18 @@ impl Engine {
             return Err(Error::plain(receipt_code(&receipt), failure_text(&receipt, actions)));
         }
         let mut text = success_text(actions);
+        let echo = text.len();
         let changed = (receipt.m > 0).then_some(Surface::Browser);
         let Some(bytes) = receipt.artifact.as_deref().and_then(|artifact| self.artifacts.bytes(artifact).ok()) else {
             if receipt.artifact.is_some() || receipt.e.is_some() {
                 text.push_str(UNFETCHED);
             }
-            return Ok(Step { text, image: None, changed });
+            return Ok(Step { text, echo, image: None, changed });
         };
         self.agent.space = None;
         let bytes = self.remember("page screenshot", bytes);
         text.push_str(" The page image is attached.");
-        Ok(Step { text, image: Some(ModelImage { mime_type: mime_type(&bytes), bytes }), changed })
+        Ok(Step { text, echo, image: Some(ModelImage { mime_type: mime_type(&bytes), bytes }), changed })
     }
 
     fn visual_step(&mut self, actions: &[Action]) -> Result<Step> {
@@ -604,6 +610,7 @@ impl Engine {
         Ok(Step {
             text: "Cropped the image; it is attached and saved as image \"crop\". Crop coordinates start at the crop's own corner; tap point still uses the full screen image."
                 .into(),
+            echo: 0,
             image: Some(ModelImage { bytes, mime_type: "image/png" }),
             changed: None,
         })

@@ -107,6 +107,10 @@ impl Bridge {
         }
         Ok(a.clone())
     }
+    /// Bounds each later wait for a helper reply, e.g. by a plan deadline.
+    pub fn set_read_timeout(&self, timeout: Duration) -> Result<()> {
+        Ok(self.stream.set_read_timeout(Some(timeout))?)
+    }
     pub fn status(&mut self) -> Result<(u64, u32)> {
         let a = self.call(|s| json!([s, "status"]))?;
         ok(&a)?;

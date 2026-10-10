@@ -33,11 +33,13 @@ const SETTLE_LIMIT: Duration = Duration::from_millis(1500);
 pub(crate) const SPACE_FILE: &str = "screen-space.json";
 const UNFETCHED: &str = " The captured file could not be retrieved; capture again if you need it.";
 
+#[derive(Clone)]
 pub struct ModelImage {
     pub bytes: Arc<[u8]>,
     pub mime_type: &'static str,
 }
 
+#[derive(Clone)]
 pub struct ModelResponse {
     pub text: String,
     pub image: Option<ModelImage>,
@@ -59,6 +61,11 @@ pub(crate) struct AgentState {
     originals: HashMap<Box<str>, Arc<[u8]>>,
     /// Where the last screen image sits on the device, to map its coordinates back.
     space: Option<ImageSpace>,
+    /// The last screen image's shape, kept after `space` ends so a rotation is still reported.
+    shape: Option<ImageSpace>,
+    /// Recent replies by request id and command: a resent request gets its first reply
+    /// instead of being compiled against the screen it may already have changed.
+    replies: Vec<(Box<str>, Result<ModelResponse>)>,
     /// Point mappings applied while compiling the current command, reported in its result.
     mapping: Vec<String>,
 }
@@ -140,11 +147,32 @@ impl Engine {
     /// run as one bounded plan; the command stops at the first plan that
     /// fails and reports exactly what did and did not run.
     pub fn model_act(&mut self, actions: &[Action], request_identity: Option<&str>) -> Result<ModelResponse> {
+        let key = request_identity.map(|id| Box::<str>::from(format!("{id}\0{actions:?}")));
+        if let Some((_, earlier)) = self.agent.replies.iter().find(|(seen, _)| key.as_ref() == Some(seen)) {
+            return copy(earlier);
+        }
+        let result = self.run_command(actions, request_identity);
+        if let Some(key) = key {
+            self.agent.replies.truncate(15);
+            self.agent.replies.insert(0, (key, copy(&result)));
+        }
+        result
+    }
+
+    fn run_command(&mut self, actions: &[Action], request_identity: Option<&str>) -> Result<ModelResponse> {
         if actions.is_empty() {
             return Err(Error::new(Code::Args, "the action command is empty"));
         }
-        if actions.windows(2).any(|pair| matches!(pair, [Action::Visual(_), Action::Visual(_)])) {
+        if actions.iter().filter(|action| matches!(action, Action::Visual(_))).count() > 1 {
             return Err(Error::plain(Code::Bounds, "Crop one image per command; nothing was run."));
+        }
+        if actions.iter().filter(|action| is_media(action) || matches!(action, Action::Browser(BrowserAction::Screenshot))).count() > 1 {
+            return Err(Error::plain(Code::Bounds, "Take one photo, recording, or screen capture per command; nothing was run."));
+        }
+        let is_point = |action: &Action| matches!(action, Action::Android(AndroidAction::PointTap { .. } | AndroidAction::Swipe { .. }));
+        if let Some(change) = actions.iter().position(changes_screen).filter(|&at| actions[at + 1..].iter().any(is_point)) {
+            let step = describe_action(&actions[change]);
+            return Err(Error::plain(Code::Bounds, format!("The screen image predates {step}: capture screen again after {step}, then tap point; nothing was run.")));
         }
         let (mut done, mut image, mut changed) = (Vec::new(), None, None);
         // Group indexes of the last image and the last screen change, so an image that predates a
@@ -282,10 +310,6 @@ impl Engine {
     }
 
     fn android_attempt(&mut self, actions: &[Action], identity: Option<&str>) -> Result<(Step, usize)> {
-        // The helper returns one artifact per plan, so a second capture would silently replace the first.
-        if actions.iter().filter(|action| is_media(action)).count() > 1 {
-            return Err(Error::plain(Code::Bounds, "Take one photo, recording, or screen capture per command; nothing was run."));
-        }
         self.agent.mapping.clear();
         let scene = self.ensure_scene()?;
         let mut ops = Vec::with_capacity(actions.len());
@@ -315,11 +339,9 @@ impl Engine {
             max_mutations: MAX_MUTATIONS,
             ops: ops.into_boxed_slice(),
         };
-        let receipt = self.run_plan(&plan).map_err(crate::journal::explain_reuse)?;
-        if receipt.m > 0 {
-            // The screen may have changed, so coordinates from the last image no longer apply.
-            self.agent.space = None;
-        }
+        let run = self.run_plan(&plan);
+        self.end_image_unless_unchanged(&run, scene.generation);
+        let receipt = run.map_err(crate::journal::explain_reuse)?;
         self.android_result(&receipt, actions)
     }
 
@@ -341,7 +363,11 @@ impl Engine {
             return Ok(Step { text, image: None, changed });
         };
         let mime = mime_type(&bytes);
-        if mime == "image/png" && actions.iter().any(|action| matches!(action, Action::Android(AndroidAction::CaptureScreen))) {
+        if let Some(at) = actions.iter().position(|action| matches!(action, Action::Android(AndroidAction::CaptureScreen))).filter(|_| mime == "image/png") {
+            if actions[at + 1..].iter().any(changes_screen) {
+                text.push_str(" The screen image predates the later steps' change, so it was left out; capture screen again to see the screen now.");
+                return Ok(Step { text, image: None, changed });
+            }
             let (image, note) = self.present_screen(bytes);
             text.push_str(" The screen image is attached. ");
             text.push_str(&note);
@@ -446,7 +472,7 @@ impl Engine {
         let Some(space) = self.agent.space else {
             return Err(Error::plain(
                 Code::Missing,
-                "There is no current screen image to take coordinates from. Capture the screen first and use points on that image; nothing was run.",
+                "There is no current screen image to take coordinates from. Capture the screen in its own command (the image arrives only after a command ends), then use points on that image; nothing was run.",
             ));
         };
         let (dx, dy) = space.to_device(x, y)?;
@@ -478,7 +504,9 @@ impl Engine {
             Ok((generation, ops))
         })?;
         let plan = BrowserPlan { id: id.into_boxed_str(), generation, deadline_ms: deadline(actions), max_mutations: MAX_MUTATIONS, ops: ops.into_boxed_slice() };
-        let receipt = self.run_browser_plan(&plan, true).map_err(crate::journal::explain_reuse)?;
+        let run = self.run_browser_plan(&plan, true);
+        self.end_image_unless_unchanged(&run, generation);
+        let receipt = run.map_err(crate::journal::explain_reuse)?;
         if receipt.ok != 1 {
             return Err(Error::plain(receipt_code(&receipt), failure_text(&receipt, actions)));
         }
@@ -536,27 +564,38 @@ impl Engine {
             return (ModelImage { bytes: self.remember("screen", bytes), mime_type }, String::new());
         };
         let mut note = compressed.note();
-        if let Some(change) = compressed.space.change_note(self.agent.space) {
+        if let Some(change) = compressed.space.change_note(self.agent.shape) {
             note = format!("{change} {note}");
         }
-        self.agent.space = Some(compressed.space);
+        (self.agent.space, self.agent.shape) = (Some(compressed.space), Some(compressed.space));
         self.agent.originals.insert("screen".into(), bytes.into());
         (ModelImage { bytes: self.remember("screen", compressed.png), mime_type: "image/png" }, note)
     }
 
+    /// Ends the last screen image unless the run provably left the screen as
+    /// it was (nothing changed, the outcome is known, the generation held).
+    fn end_image_unless_unchanged(&mut self, run: &Result<Receipt>, generation: u64) {
+        if !run.as_ref().is_ok_and(|receipt| receipt.m == 0 && receipt.g == generation && receipt.e.as_deref() != Some("unknown")) {
+            self.agent.space = None;
+        }
+    }
+
     /// One-shot CLI processes keep the last screen image's coordinate space
     /// on disk, so `au act 'tap point X Y'` matches the image saved by the
-    /// previous `au act 'capture screen'`.
+    /// previous `au act 'capture screen'`. An ended image keeps only its shape.
     pub fn load_image_space(&mut self) {
         let value = std::fs::read(self.root().join(SPACE_FILE)).ok().and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
-        self.agent.space = value.as_ref().and_then(ImageSpace::from_json);
+        self.agent.shape = value.as_ref().and_then(ImageSpace::from_json);
+        self.agent.space = self.agent.shape.filter(|_| value.as_ref().and_then(|value| value["ended"].as_bool()) != Some(true));
     }
 
     pub fn save_image_space(&self) {
         let path = self.root().join(SPACE_FILE);
-        match self.agent.space {
-            Some(space) => {
-                let _ = crate::device::atomic(&path, space.to_json().to_string().as_bytes());
+        match self.agent.space.or(self.agent.shape) {
+            Some(shape) => {
+                let mut value = shape.to_json();
+                value["ended"] = json!(self.agent.space.is_none());
+                let _ = crate::device::atomic(&path, value.to_string().as_bytes());
             }
             None => {
                 let _ = std::fs::remove_file(&path);
@@ -650,6 +689,18 @@ fn deadline(actions: &[Action]) -> u32 {
 
 fn is_media(action: &Action) -> bool {
     matches!(action, Action::Android(AndroidAction::CaptureScreen | AndroidAction::Camera { .. } | AndroidAction::Microphone(_) | AndroidAction::ScreenRecord(_)))
+}
+
+/// Whether a step may change what the screen shows, which ends the last screen image.
+fn changes_screen(action: &Action) -> bool {
+    use {AndroidAction as A, BrowserAction as B};
+    let check = matches!(action, Action::Android(A::WaitTarget { .. } | A::WaitText { .. } | A::VerifyExists(_) | A::VerifyGone(_) | A::VerifyText(_)));
+    !check && !is_media(action) && !matches!(action, Action::Visual(_) | Action::Browser(B::WaitText { .. } | B::WaitCss { .. } | B::Screenshot))
+}
+
+/// A stored reply, handed out again for a resent request.
+fn copy(reply: &Result<ModelResponse>) -> Result<ModelResponse> {
+    reply.as_ref().cloned().map_err(|error| Error { code: error.code, message: error.message.clone(), plain: error.plain })
 }
 
 /// `com.example.app`-shaped names launch directly; anything else is a

@@ -122,15 +122,11 @@ pub(crate) fn notification_items(value: &Value) -> Vec<&Value> {
 }
 
 /// Resolves a notification by its title (or text) to the helper's opaque key.
-/// The label a notification is listed and targeted by: its title, or its text when untitled.
+/// The label a notification is listed and targeted by: its title, else its text, else a placeholder.
 pub(crate) fn notification_label(item: &Value) -> String {
     let field = |name: &str| item.get(name).and_then(Value::as_str).unwrap_or("").trim().to_owned();
-    let title = field("title");
-    if title.is_empty() {
-        field("text")
-    } else {
-        title
-    }
+    let label = [field("title"), field("text")].into_iter().find(|label| !label.is_empty());
+    label.unwrap_or_else(|| "(no title or text)".into())
 }
 
 pub(crate) fn notification(value: &Value, target: &Target) -> Result<Box<str>> {
@@ -194,8 +190,10 @@ mod tests {
             {"id":"k-old","title":"Messages","text":"Lunch?"},
             {"id":"k-new","title":"Messages","text":"Running late"},
             {"id":"k-cal","title":"Calendar","text":"Standup in 5 minutes"},
-            {"id":"k-bare","title":"","text":"Backup finished"}
+            {"id":"k-bare","title":"","text":"Backup finished"},
+            {"id":"k-empty","title":"","text":" "}
         ]});
+        assert_eq!(notification(&value, &target("(no title or text)", None)).unwrap().as_ref(), "k-empty", "listed items are targetable");
         assert_eq!(notification(&value, &target("Calendar", None)).unwrap().as_ref(), "k-cal");
         assert_eq!(notification(&value, &target("Messages", Some(1))).unwrap().as_ref(), "k-new");
         assert_eq!(notification(&value, &target("Backup finished", None)).unwrap().as_ref(), "k-bare", "untitled items use their text");

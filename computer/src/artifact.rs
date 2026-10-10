@@ -8,6 +8,7 @@ use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File},
     io::{Read, Seek, SeekFrom},
+    path::PathBuf,
 };
 
 pub const MAX_ARTIFACT: usize = 16 * 1024 * 1024;
@@ -24,13 +25,24 @@ impl Artifacts {
         if bytes.len() > MAX_ARTIFACT {
             return Err(Error::new(Code::Bounds, "artifact exceeds 16 MiB"));
         }
-        let digest = Sha256::digest(bytes);
-        let id = format!("h{}", digest[..12].iter().map(|b| format!("{b:02x}")).collect::<String>());
+        let id = content_id(bytes);
         let path = self.paths.artifacts.join(&id);
         if !path.exists() {
             atomic(&path, bytes)?;
         }
         Ok(id.into_boxed_str())
+    }
+    /// Stores media under a content-addressed name with a real extension so
+    /// a person or shell agent can open it, and returns the absolute path.
+    pub fn export(&self, bytes: &[u8], extension: &str) -> Result<PathBuf> {
+        if bytes.is_empty() || bytes.len() > MAX_ARTIFACT || extension.is_empty() || !extension.bytes().all(|b| b.is_ascii_alphanumeric()) {
+            return Err(Error::new(Code::Bounds, "exported artifact is empty, too large, or has an invalid extension"));
+        }
+        let path = self.paths.artifacts.join(format!("{}.{extension}", content_id(bytes)));
+        if !path.exists() {
+            atomic(&path, bytes)?;
+        }
+        Ok(path)
     }
     pub fn read(&self, id: &str, range: Option<Range>) -> Result<Value> {
         if !valid(id) || !id.starts_with('h') {
@@ -62,6 +74,10 @@ impl Artifacts {
         }
         Ok(fs::read(path)?)
     }
+}
+
+fn content_id(bytes: &[u8]) -> String {
+    format!("h{}", Sha256::digest(bytes)[..12].iter().map(|b| format!("{b:02x}")).collect::<String>())
 }
 
 pub fn valid(id: &str) -> bool {

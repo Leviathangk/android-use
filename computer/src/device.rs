@@ -67,6 +67,10 @@ pub struct AdbDevice {
 }
 
 impl Adb {
+    #[cfg(test)]
+    pub(crate) fn for_tests() -> Self {
+        Self { path: PathBuf::from("adb-not-used-in-tests") }
+    }
     pub fn discover() -> Result<Self> {
         if let Some(v) = env::var_os("AU_ADB") {
             let p = PathBuf::from(v);
@@ -307,18 +311,27 @@ pub fn atomic(path: &Path, bytes: &[u8]) -> Result<()> {
         std::io::Write::write_all(&mut f, bytes)?;
         f.sync_all()?;
     }
-    if path.exists() {
-        fs::rename(path, &backup)?;
-        if let Err(e) = fs::rename(&tmp, path) {
-            let _ = fs::rename(&backup, path);
-            let _ = fs::remove_file(&tmp);
-            return Err(e.into());
+    // On Unix a rename replaces the target in one step, so a crash leaves either
+    // the old or the new file. Platforms that cannot rename over an existing
+    // file move the old one aside first; that path can briefly leave no file.
+    match fs::rename(&tmp, path) {
+        Ok(()) => Ok(()),
+        Err(error) if path.exists() => {
+            fs::rename(path, &backup)?;
+            if let Err(e) = fs::rename(&tmp, path) {
+                let _ = fs::rename(&backup, path);
+                let _ = fs::remove_file(&tmp);
+                return Err(e.into());
+            }
+            fs::remove_file(backup)?;
+            let _ = error;
+            Ok(())
         }
-        fs::remove_file(backup)?;
-    } else {
-        fs::rename(tmp, path)?;
+        Err(error) => {
+            let _ = fs::remove_file(&tmp);
+            Err(error.into())
+        }
     }
-    Ok(())
 }
 
 #[cfg(test)]

@@ -1,5 +1,5 @@
 use crate::{
-    api::{Code, Error, Node, Plan, Range, Receipt, Result, Scene, MAX_FRAME},
+    api::{Code, Error, Node, Plan, Range, Receipt, Result, Scene, MAX_FRAME, MAX_INLINE},
     device::{Adb, Device},
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
@@ -11,12 +11,18 @@ use std::{
     time::{Duration, Instant},
 };
 
+/// Largest artifact slice requested per helper round trip. Base64 inflates it
+/// to ~350 KiB, comfortably inside the 1 MiB frame. Helpers older than 1.1
+/// reject anything above `MAX_INLINE`; `download` then falls back to that.
+pub const MAX_CHUNK: usize = 256 * 1024;
+
 pub struct Bridge {
     adb: Adb,
     device: Device,
     port: u16,
     stream: TcpStream,
     seq: u64,
+    chunk: usize,
 }
 
 pub enum Observation {
@@ -34,13 +40,37 @@ impl Drop for Bridge {
 }
 
 impl Bridge {
+    /// A bridge over an already-connected stream, for host tests that run a
+    /// fake helper. No ADB forward is owned, so dropping it runs no command.
+    #[cfg(test)]
+    pub(crate) fn over(stream: TcpStream, device: Device) -> Self {
+        Self { adb: Adb::for_tests(), device, port: 0, stream, seq: 0, chunk: MAX_CHUNK }
+    }
+
     pub fn connect(adb: Adb, device: Device) -> Result<Self> {
+        // An already-running helper answers immediately; only start the
+        // service (an extra `adb shell am` process) when it does not.
+        if let Ok(bridge) = Self::handshake(&adb, &device) {
+            return Ok(bridge);
+        }
         adb.start_helper(&device)?;
+        let deadline = Instant::now() + Duration::from_secs(8);
+        loop {
+            match Self::handshake(&adb, &device) {
+                Ok(bridge) => return Ok(bridge),
+                Err(error) if Instant::now() >= deadline => return Err(error),
+                Err(_) => thread::sleep(Duration::from_millis(150)),
+            }
+        }
+    }
+
+    fn handshake(adb: &Adb, device: &Device) -> Result<Self> {
         // These abstract-socket names are a deployed wire-protocol identifier, not a public product version.
         // Keep them stable so a v1 host can reconnect to an already-installed helper.
-        let bootstrap = adb.forward(&device, "localabstract:aubridge-bootstrap-v3")?;
+        let bootstrap = adb.forward(device, "localabstract:aubridge-bootstrap-v3")?;
         let auth = (|| {
-            let mut s = connect(bootstrap, Duration::from_secs(8))?;
+            let mut s = connect(bootstrap, Duration::from_secs(2))?;
+            s.set_read_timeout(Some(Duration::from_secs(3)))?;
             send(&mut s, &json!([0, "bootstrap"]))?;
             let r = recv(&mut s)?;
             let a = r.as_array().ok_or_else(|| Error::new(Code::Protocol, "invalid bootstrap reply"))?;
@@ -49,15 +79,9 @@ impl Bridge {
             }
             Ok((text(&a[2])?.to_string(), text(&a[3])?.to_string()))
         })();
-        let (token, nonce) = match auth {
-            Ok(v) => v,
-            Err(e) => {
-                adb.remove_forward(&device, bootstrap);
-                return Err(e);
-            }
-        };
-        adb.remove_forward(&device, bootstrap);
-        let command = adb.forward(&device, "localabstract:aubridge-v3")?;
+        adb.remove_forward(device, bootstrap);
+        let (token, nonce) = auth?;
+        let command = adb.forward(device, "localabstract:aubridge-v3")?;
         let result = (|| {
             let mut stream = connect(command, Duration::from_secs(5))?;
             send(&mut stream, &json!([0, "hello", token, nonce]))?;
@@ -66,10 +90,10 @@ impl Bridge {
             if a.len() < 2 || a[0].as_u64() != Some(0) || a[1].as_u64() != Some(0) {
                 return Err(Error::new(Code::Auth, "helper authentication failed"));
             }
-            Ok(Self { adb: adb.clone(), device: device.clone(), port: command, stream, seq: 0 })
+            Ok(Self { adb: adb.clone(), device: device.clone(), port: command, stream, seq: 0, chunk: MAX_CHUNK })
         })();
         if result.is_err() {
-            adb.remove_forward(&device, command);
+            adb.remove_forward(device, command);
         }
         result
     }
@@ -175,10 +199,31 @@ impl Bridge {
         let size = u64v(&a[2])?;
         let start = u64v(&a[3])?;
         let bytes = STANDARD.decode(text(&a[4])?).map_err(|_| Error::new(Code::Protocol, "invalid artifact base64"))?;
-        if bytes.len() > crate::api::MAX_INLINE {
-            return Err(Error::new(Code::Bounds, "artifact reply exceeds inline limit"));
+        if bytes.len() > MAX_CHUNK {
+            return Err(Error::new(Code::Bounds, "artifact reply exceeds chunk limit"));
         }
         Ok((size, start, bytes))
+    }
+    /// Downloads a whole device artifact in as few round trips as the helper
+    /// allows, verifying that every slice lands exactly where it should.
+    pub fn download(&mut self, id: &str, limit: usize) -> Result<Vec<u8>> {
+        let (size, _, _) = self.artifact(id, Some(Range { start: 0, end: 0 }))?;
+        let size = usize::try_from(size).ok().filter(|size| (1..=limit).contains(size)).ok_or_else(|| Error::new(Code::Bounds, "the device artifact is empty or too large"))?;
+        let mut bytes = Vec::with_capacity(size);
+        while bytes.len() < size {
+            let (start, end) = (bytes.len() as u64, (bytes.len() + self.chunk).min(size) as u64);
+            match self.artifact(id, Some(Range { start, end })) {
+                Err(error) if error.code == Code::Bounds && self.chunk > MAX_INLINE => self.chunk = MAX_INLINE,
+                Err(error) => return Err(error),
+                Ok((total, actual, chunk)) => {
+                    if total != size as u64 || actual != start || chunk.is_empty() || chunk.len() as u64 > end - start {
+                        return Err(Error::new(Code::Protocol, "the device artifact was malformed"));
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+            }
+        }
+        Ok(bytes)
     }
     pub fn query(&mut self, name: &str, args: Value) -> Result<Value> {
         let a = self.call(|s| json!([s, name, args]))?;
@@ -271,5 +316,51 @@ mod tests {
         let e = helper_error(&[json!(1), json!(10)]);
         assert_eq!(e.code, Code::Permission);
         assert_eq!(e.code.wire(), "permission");
+    }
+
+    /// A minimal helper that serves one artifact, optionally with the
+    /// pre-1.1 limit of `MAX_INLINE` bytes per request.
+    fn fake_helper(data: Vec<u8>, legacy: bool) -> (Bridge, std::thread::JoinHandle<usize>) {
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            let (mut s, _) = listener.accept().unwrap();
+            let mut requests = 0;
+            while let Ok(q) = recv(&mut s) {
+                requests += 1;
+                let seq = q[0].as_u64().unwrap();
+                let (start, end) = (q[3].as_u64().unwrap() as usize, q[4].as_u64().unwrap() as usize);
+                let reply =
+                    if end > data.len() || (legacy && end - start > MAX_INLINE) { json!([seq, 6]) } else { json!([seq, 0, data.len(), start, STANDARD.encode(&data[start..end])]) };
+                send(&mut s, &reply).unwrap();
+            }
+            requests
+        });
+        let stream = TcpStream::connect(addr).unwrap();
+        let device = Device { endpoint: "test".into(), hardware: "test".into() };
+        (Bridge { adb: Adb::for_tests(), device, port: 0, stream, seq: 0, chunk: MAX_CHUNK }, server)
+    }
+
+    #[test]
+    fn downloads_large_artifacts_in_few_round_trips() {
+        let data: Vec<u8> = (0..700_000u32).map(|i| (i % 251) as u8).collect();
+        let (mut bridge, server) = fake_helper(data.clone(), false);
+        assert_eq!(bridge.download("a1", 1 << 24).unwrap(), data);
+        drop(bridge);
+        assert_eq!(server.join().unwrap(), 1 + data.len().div_ceil(MAX_CHUNK));
+    }
+
+    #[test]
+    fn falls_back_to_inline_slices_for_older_helpers() {
+        let data: Vec<u8> = (0..9_000u32).map(|i| (i % 7) as u8).collect();
+        let (mut bridge, _server) = fake_helper(data.clone(), true);
+        assert_eq!(bridge.download("a1", 1 << 24).unwrap(), data);
+        assert_eq!(bridge.chunk, MAX_INLINE);
+    }
+
+    #[test]
+    fn refuses_artifacts_over_the_caller_limit() {
+        let (mut bridge, _server) = fake_helper(vec![1; 5_000], false);
+        assert_eq!(bridge.download("a1", 4_000).unwrap_err().code, Code::Bounds);
     }
 }

@@ -33,12 +33,28 @@ pub enum AndroidAction {
     Tap(Target),
     Toggle(Target),
     Hold(Target),
-    Type { text: Box<str>, target: Target },
-    Scroll { direction: Direction, target: Target },
+    Type {
+        text: Box<str>,
+        target: Target,
+    },
+    Scroll {
+        direction: Direction,
+        target: Target,
+    },
+    /// Scroll the screen's main scrollable area, which is usually unlabeled.
+    ScrollScreen(Direction),
     Key(Key),
-    WaitTarget { target: Target, seconds: u16 },
-    WaitText { text: Box<str>, seconds: u16 },
-    WaitScreenChange { seconds: u16 },
+    WaitTarget {
+        target: Target,
+        seconds: u16,
+    },
+    WaitText {
+        text: Box<str>,
+        seconds: u16,
+    },
+    WaitScreenChange {
+        seconds: u16,
+    },
     VerifyExists(Target),
     VerifyGone(Target),
     VerifyText(Box<str>),
@@ -46,14 +62,27 @@ pub enum AndroidAction {
     OpenSetting(Box<str>),
     OpenLink(Box<str>),
     CaptureScreen,
-    Camera { facing: Box<str>, width: Option<u16>, height: Option<u16> },
+    Camera {
+        facing: Box<str>,
+        width: Option<u16>,
+        height: Option<u16>,
+    },
     Microphone(u16),
     ScreenRecord(u16),
     NotificationOpen(Target),
     NotificationDismiss(Target),
     NotificationAction(Target),
-    PointTap { x: u16, y: u16 },
-    Swipe { x1: u16, y1: u16, x2: u16, y2: u16, duration_ms: u16 },
+    PointTap {
+        x: u16,
+        y: u16,
+    },
+    Swipe {
+        x1: u16,
+        y1: u16,
+        x2: u16,
+        y2: u16,
+        duration_ms: u16,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -102,7 +131,39 @@ impl Lexeme {
 
 fn command_error(input: &str, code: Code, cause: &str, correction: &str) -> Error {
     let phrase: String = input.chars().filter(|c| !matches!(c, '{' | '}' | '[' | ']')).take(120).collect();
-    Error::new(code, format!("Could not parse \"{phrase}\". {cause} Use {correction}."))
+    Error::new(code, format!("Could not parse \"{phrase}\": {}. Use {correction}.", cause.trim_end_matches('.')))
+}
+
+/// Re-renders one `then`-separated step for error messages.
+fn render(tokens: &[Lexeme]) -> String {
+    tokens.iter().map(|token| token.word().map_or_else(|| format!("\"{}\"", token.quoted().unwrap_or_default()), str::to_owned)).collect::<Vec<_>>().join(" ")
+}
+
+/// The canonical form of the command an agent was most likely attempting.
+fn example(tokens: &[Lexeme]) -> &'static str {
+    let word = |index: usize| tokens.get(index).and_then(Lexeme::word).unwrap_or("").to_ascii_lowercase();
+    match (word(0).as_str(), word(1).as_str()) {
+        ("type", _) => r#"type "TEXT" in "FIELD""#,
+        ("scroll", _) => r#"scroll down, or scroll down in "AREA""#,
+        ("press", _) => "press back",
+        ("wait", _) => r#"wait for text "TEXT" up to 5 seconds"#,
+        ("verify", _) => r#"verify "LABEL" exists, or verify text "TEXT" exists"#,
+        ("open", "app") => r#"open app "NAME""#,
+        ("open", "setting") => r#"open setting "wifi""#,
+        ("open", "link") => r#"open link "https://example.com""#,
+        ("open" | "dismiss" | "run" | "notification", _) => r#"open app "NAME", or open notification "TITLE""#,
+        ("page", "type") => r#"page type "TEXT" in "FIELD""#,
+        ("page", "wait") => r#"page wait for text "TEXT" up to 5 seconds"#,
+        ("page", "open") => r#"page open "https://example.com""#,
+        ("page", _) => r#"page click "LABEL""#,
+        ("take", _) => "take rear camera photo",
+        ("record", _) => "record screen for 5 seconds",
+        ("swipe", _) => "swipe from 500 1500 to 500 500 over 300 milliseconds",
+        ("crop", _) => r#"crop image "screen" from X Y with size W by H"#,
+        ("new", _) => r#"new tab "https://example.com""#,
+        ("select" | "close", _) => r#"select tab "TITLE""#,
+        _ => r#"tap "LABEL""#,
+    }
 }
 
 fn lex(input: &str) -> Result<Vec<Lexeme>> {
@@ -259,6 +320,16 @@ fn key_word(value: &str) -> Result<Key> {
     }
 }
 
+fn direction_word(token: &Lexeme) -> Result<Direction> {
+    match token.word().unwrap_or("").to_ascii_lowercase().as_str() {
+        "up" => Ok(Direction::Up),
+        "down" => Ok(Direction::Down),
+        "left" => Ok(Direction::Left),
+        "right" => Ok(Direction::Right),
+        _ => Err(Error::new(Code::Args, "scroll direction must be up, down, left, or right")),
+    }
+}
+
 fn browser_key(value: &str) -> bool {
     matches!(value, "Enter" | "Tab" | "Escape" | "ArrowUp" | "ArrowDown" | "ArrowLeft" | "ArrowRight" | "Backspace")
 }
@@ -342,7 +413,7 @@ fn parse_android_action(t: &[Lexeme]) -> Result<AndroidAction> {
             AndroidAction::Toggle(target)
         });
     }
-    if t.len() >= 4 && is_word(t, 0, "type") && is_word(t, 2, "in") {
+    if t.len() >= 4 && is_word(t, 0, "type") && (is_word(t, 2, "in") || is_word(t, 2, "into")) {
         let text = quoted_at(t, 1, "text")?;
         let (target, next) = target_at(t, 3)?;
         if next != t.len() {
@@ -350,14 +421,11 @@ fn parse_android_action(t: &[Lexeme]) -> Result<AndroidAction> {
         }
         return Ok(AndroidAction::Type { text, target });
     }
+    if t.len() == 2 && is_word(t, 0, "scroll") {
+        return Ok(AndroidAction::ScrollScreen(direction_word(&t[1])?));
+    }
     if t.len() >= 4 && is_word(t, 0, "scroll") && is_word(t, 2, "in") {
-        let direction = match t[1].word().unwrap_or("").to_ascii_lowercase().as_str() {
-            "up" => Direction::Up,
-            "down" => Direction::Down,
-            "left" => Direction::Left,
-            "right" => Direction::Right,
-            _ => return Err(Error::new(Code::Args, "scroll direction must be up, down, left, or right")),
-        };
+        let direction = direction_word(&t[1])?;
         let (target, next) = target_at(t, 3)?;
         if next != t.len() {
             return Err(Error::new(Code::Args, "scroll accepts one target"));
@@ -500,7 +568,7 @@ fn parse_browser_action(t: &[Lexeme]) -> Result<BrowserAction> {
         }
         return Ok(if is_word(t, 1, "click") { BrowserAction::Click(target) } else { BrowserAction::Focus(target) });
     }
-    if t.len() >= 5 && is_word(t, 0, "page") && is_word(t, 1, "type") && is_word(t, 3, "in") {
+    if t.len() >= 5 && is_word(t, 0, "page") && is_word(t, 1, "type") && (is_word(t, 3, "in") || is_word(t, 3, "into")) {
         let text = quoted_at(t, 2, "text")?;
         let (target, next) = target_at(t, 4)?;
         if next != t.len() {
@@ -517,7 +585,10 @@ fn parse_browser_action(t: &[Lexeme]) -> Result<BrowserAction> {
     }
     if t.len() == 3 && is_word(t, 0, "page") && is_word(t, 1, "scroll") {
         let px = signed_at(t, 2, "pixels")?;
-        return Ok(BrowserAction::Scroll(i32::try_from(px).map_err(|_| Error::new(Code::Bounds, "pixels exceed 32-bit range"))?));
+        if !(-20_000..=20_000).contains(&px) {
+            return Err(Error::new(Code::Bounds, "page scroll must be within -20000..20000 pixels"));
+        }
+        return Ok(BrowserAction::Scroll(px as i32));
     }
     if t.len() == 9
         && is_word(t, 0, "page")
@@ -578,18 +649,23 @@ fn parse_action(t: &[Lexeme]) -> Result<Action> {
 }
 
 pub fn parse_read_command(input: &str) -> Result<CommandRead> {
-    parse_read_inner(input).map_err(|e| command_error(input, e.code, &e.message, "screen"))
+    parse_read_inner(input).map_err(|e| command_error(input, e.code, &e.message, r#"screen, find "TEXT", or page text"#))
 }
 
 pub fn parse_act_command(input: &str) -> Result<Box<[Action]>> {
-    let parsed = fragments(input).and_then(|parts| {
-        let actions: Vec<Action> = parts.iter().map(|part| parse_action(part)).collect::<Result<_>>()?;
-        if actions.iter().filter(|action| action_mutates(action)).count() > MAX_MUTATIONS as usize {
-            return Err(Error::new(Code::Bounds, "an action command may contain at most 16 mutations"));
-        }
-        Ok(actions.into_boxed_slice())
-    });
-    parsed.map_err(|e| command_error(input, e.code, &e.message, "tap \"TARGET\""))
+    let parts = fragments(input).map_err(|e| command_error(input, e.code, &e.message, r#"tap "LABEL""#))?;
+    let mut actions = Vec::with_capacity(parts.len());
+    for (index, part) in parts.iter().enumerate() {
+        let action = parse_action(part).map_err(|e| {
+            let step = if parts.len() > 1 { format!(" in step {} of {}", index + 1, parts.len()) } else { String::new() };
+            command_error(&render(part), e.code, &format!("{}{step}", e.message.trim_end_matches('.')), example(part))
+        })?;
+        actions.push(action);
+    }
+    if actions.iter().filter(|action| action_mutates(action)).count() > MAX_MUTATIONS as usize {
+        return Err(command_error(input, Code::Bounds, "an action command may contain at most 16 changes", "two shorter commands"));
+    }
+    Ok(actions.into_boxed_slice())
 }
 
 fn action_mutates(action: &Action) -> bool {
@@ -624,9 +700,40 @@ fn url_at(tokens: &[Lexeme], index: usize, name: &str) -> Result<Box<str>> {
     Ok(url)
 }
 
+/// MCP tool definitions. The descriptions carry the whole grammar so an
+/// agent can use the tools correctly without any other documentation.
 pub fn tool_schemas() -> Value {
+    let input = json!({"type":"object","additionalProperties":false,"required":["command"],"properties":{"command":{"type":"string","minLength":1,"maxLength":MAX_COMMAND}}});
     json!([
-        {"name":"android.read","description":"Read Android or Chrome with one plain command. Use status, screen, screen changes, screen matching \"TEXT\", find \"TEXT\", browser tabs, page, page text, capabilities, location, notifications, or image hash/difference. Read state before acting when the current view is unknown.","annotations":{"readOnlyHint":true},"inputSchema":{"type":"object","additionalProperties":false,"required":["command"],"properties":{"command":{"type":"string","minLength":1,"maxLength":8192}}}},
-        {"name":"android.act","description":"Act on Android or Chrome with one plain command. Supply the user's runtime target, text, app display name, or URL inside quotes; nothing is typed unless the command explicitly says type. Use tap \"TARGET\", type \"TEXT\" in \"FIELD\", open app \"DISPLAY NAME\", page click \"TARGET\", and bounded waits or verification.","annotations":{"readOnlyHint":false,"destructiveHint":true},"inputSchema":{"type":"object","additionalProperties":false,"required":["command"],"properties":{"command":{"type":"string","minLength":1,"maxLength":8192}}}}
+        {
+            "name": "android.read",
+            "title": "Read the Android device",
+            "description": READ_DESCRIPTION,
+            "annotations": {"title": "Read the Android device", "readOnlyHint": true, "openWorldHint": true},
+            "inputSchema": input,
+        },
+        {
+            "name": "android.act",
+            "title": "Act on the Android device",
+            "description": ACT_DESCRIPTION,
+            "annotations": {"title": "Act on the Android device", "readOnlyHint": false, "destructiveHint": true, "idempotentHint": false, "openWorldHint": true},
+            "inputSchema": input,
+        }
     ])
 }
+
+const READ_DESCRIPTION: &str = "Look at the connected Android device without changing it. Send one command:\n\
+status | screen | screen full | screen changes | screen matching \"TEXT\" | find \"TEXT\"\n\
+page | page text | page text matching \"TEXT\" | browser tabs (Chrome)\n\
+notifications | location | capabilities | image hash \"NAME\" | image difference \"A\" and \"B\"\n\
+screen lists visible controls as `Label — state kind`; a duplicated label shows the (number N) to use. \
+If a screen has little readable text, its image is attached. Read only when you do not already know the state: android.act reports the screen after each change.";
+
+const ACT_DESCRIPTION: &str = "Change the connected Android device with one plain command. Quote the exact visible label in straight double quotes; add number N after a duplicated label. Join up to 16 changes with then.\n\
+Android: tap \"LABEL\" | toggle \"LABEL\" | hold \"LABEL\" | type \"TEXT\" in \"FIELD\" | scroll up|down|left|right [in \"AREA\"] | press back|home|recents|notifications|enter | \
+open app \"NAME\" | open setting \"wifi|bluetooth|display|sound|notifications|apps|battery|accessibility|date and time|developer options\" | open link \"https://…\"\n\
+Checks: wait for \"LABEL\" up to N seconds | wait for text \"TEXT\" up to N seconds | wait for screen change up to N seconds | verify \"LABEL\" exists | verify \"LABEL\" is gone | verify text \"TEXT\" exists (N ≤ 30)\n\
+Chrome: page open \"URL\" | page click \"LABEL\" | page type \"TEXT\" in \"FIELD\" | page press \"Enter|Tab|Escape|Backspace|ArrowUp|ArrowDown\" | page scroll PIXELS | page wait for text \"TEXT\" up to N seconds | page back | page reload | page screenshot | new tab \"URL\" | select tab \"TITLE\" | close tab \"TITLE\"\n\
+Media and notifications (ask the user first): capture screen | take rear|front camera photo | record microphone|screen for N seconds | open notification \"TITLE\" | dismiss notification \"TITLE\" | run notification action \"TITLE\"\n\
+Fallback after an attached screen image only: tap point X Y | swipe from X1 Y1 to X2 Y2 over MS milliseconds (image pixel coordinates).\n\
+Results say what ran and what is on screen now. stale = nothing ran, retry; partial or unknown = read before changing anything again.";

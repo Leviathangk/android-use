@@ -2,8 +2,8 @@
 
 use au::{
     adapter,
-    api::{BrowserPlan, Code, Error, Plan, Range, Result, VisualPlan},
-    engine::Engine,
+    api::{parse_act_command, parse_read_command, BrowserPlan, Code, Error, Plan, Range, Result, VisualPlan},
+    engine::{plain_error, Engine, ModelResponse},
     install,
 };
 use serde_json::Value;
@@ -66,8 +66,22 @@ fn run(human: bool) -> Result<Value> {
                 _ => return Err(Error::new(Code::Args, "visual requires hash ID or diff ID ID")),
             }
         }
+        "read" => {
+            let mut engine = Engine::open()?;
+            engine.load_image_space();
+            let response = parse_read_command(&a[1..].join(" ")).and_then(|command| engine.model_read(command)).map_err(|e| Error::plain(e.code, plain_error(&e)))?;
+            engine.save_image_space();
+            model_value(&engine, response)?
+        }
+        "act" if a.get(1).is_some_and(|raw| !raw.trim_start().starts_with('{')) => {
+            let mut engine = Engine::open()?;
+            engine.load_image_space();
+            let response = parse_act_command(&a[1..].join(" ")).and_then(|actions| engine.model_act(&actions, None)).map_err(|e| Error::plain(e.code, plain_error(&e)))?;
+            engine.save_image_space();
+            model_value(&engine, response)?
+        }
         "act" => {
-            let raw = a.get(1).ok_or_else(|| Error::new(Code::Args, "act requires one JSON object"))?;
+            let raw = a.get(1).ok_or_else(|| Error::new(Code::Args, "act requires a command such as act 'tap \"Settings\"', or one legacy JSON plan"))?;
             let v: Value = serde_json::from_str(raw)?;
             let mut engine = Engine::open()?;
             match v.get("target").and_then(Value::as_str) {
@@ -88,11 +102,20 @@ fn run(human: bool) -> Result<Value> {
         "uninstall" => install::uninstall()?,
         "version" | "--version" => serde_json::json!({"version":env!("CARGO_PKG_VERSION")}),
         "help" | "--help" | "-h" => {
-            serde_json::json!({"commands":["devices","setup [APK]","status","doctor","update [APK]","uninstall","enroll ENDPOINT","repair [APK]","serve --mcp|--jsonl","observe [BASE] [--detail]","browser tabs|observe|text","capabilities","location","notifications","visual hash|diff","act JSON","artifact ID [START END]"]})
+            serde_json::json!({"commands":["devices","setup [APK]","status","doctor","update [APK]","uninstall","enroll ENDPOINT","repair [APK]","serve --mcp|--jsonl","read COMMAND","act COMMAND","observe [BASE] [--detail]","browser tabs|observe|text","capabilities","location","notifications","visual hash|diff","act JSON","artifact ID [START END]"]})
         }
         _ => return Err(Error::new(Code::Args, format!("unknown command: {}", a[0]))),
     };
     Ok(out)
+}
+/// Plain-command results for the CLI. An attached image is saved to the
+/// private artifact folder and its path is returned instead of inline bytes.
+fn model_value(engine: &Engine, response: ModelResponse) -> Result<Value> {
+    let mut value = serde_json::json!({"ok":1,"text":response.text});
+    if let Some(image) = response.image {
+        value["image"] = serde_json::json!(engine.export(&image.bytes)?);
+    }
+    Ok(value)
 }
 fn parse(s: &str) -> Result<u64> {
     s.parse().map_err(|_| Error::new(Code::Args, "range values must be unsigned integers"))
@@ -100,14 +123,19 @@ fn parse(s: &str) -> Result<u64> {
 
 fn human_value(command: &str, value: &Value) -> String {
     match command {
-        "help" | "--help" | "-h" => "Android Use — Give AI an Android device.\n\nGet connected:\n  au devices      List connected Android devices\n  au setup        Prepare and remember one device\n  au status       Check whether Android Use is ready\n  au doctor       Explain anything that needs attention\n\nUse the device:\n  au observe      Read the visible interface\n  au browser      Read Chrome tabs or page state\n  au capabilities Show optional device capabilities\n  au notifications Read available notifications\n  au location     Read the current location\n\nConnect an agent:\n  au serve --mcp   Model Context Protocol over stdio\n  au serve --jsonl Typed JSON Lines over stdio\n\nMaintenance:\n  au update       Update the Android helper\n  au uninstall    Remove Android Use and its local state\n\nRun `au help --json` for the complete machine-readable command list.".into(),
+        "help" | "--help" | "-h" => "Android Use — Give AI an Android device.\n\nGet connected:\n  au devices      List connected Android devices\n  au setup        Prepare and remember one device\n  au status       Check whether Android Use is ready\n  au doctor       Explain anything that needs attention\n\nUse the device (same commands as the MCP tools):\n  au read screen                 List what is on screen\n  au read 'find \"Wi-Fi\"'          Look for one item\n  au read page                   Read the current Chrome page\n  au act 'tap \"Settings\"'         Tap a visible label\n  au act 'open app \"Chrome\" then page open \"https://example.com\"'\n\nConnect an agent:\n  au serve --mcp   Model Context Protocol over stdio\n  au serve --jsonl Typed JSON Lines over stdio\n\nMaintenance:\n  au update       Update the Android helper\n  au uninstall    Remove Android Use and its local state\n\nRun `au help --json` for the complete machine-readable command list.".into(),
         "version" | "--version" => format!("Android Use {}", value.get("version").and_then(Value::as_str).unwrap_or(env!("CARGO_PKG_VERSION"))),
-        "status" => {
-            if value.get("ok").and_then(Value::as_u64) == Some(1) {
-                format!("Android Use is ready\n\n✓ Android helper connected\n✓ UI generation {}\n✓ Capability mask {}", value["g"], value["cap"])
-            } else {
-                "Android Use is not ready.\nRun: au doctor".into()
+        "status" => match (value.get("ok").and_then(Value::as_u64) == Some(1), value.get("cap").and_then(Value::as_u64).unwrap_or(0) != 0) {
+            (true, true) => "Android Use is ready\n\n✓ Android helper connected\n✓ Accessibility control is on".into(),
+            (true, false) => "Android Use is almost ready\n\n✓ Android helper connected\n! Accessibility control is off\n\nOn Android, open Settings → Accessibility → Android Use and turn it on.\nThen run: au status".into(),
+            _ => "Android Use is not ready.\nRun: au doctor".into(),
+        },
+        "read" | "act" if value.get("text").is_some() => {
+            let mut out = value["text"].as_str().unwrap_or_default().to_owned();
+            if let Some(path) = value.get("image").and_then(Value::as_str) {
+                out.push_str(&format!("\n\nImage saved to {path}"));
             }
+            out
         }
         "devices" => {
             let devices = value.get("devices").and_then(Value::as_array);
@@ -200,6 +228,9 @@ fn title(value: &str) -> String {
 }
 
 fn human_error(error: &Error) -> String {
+    if error.plain {
+        return error.message.clone();
+    }
     let detail = match error.code {
         Code::Device => "Android device tools or the USB connection needs attention.",
         Code::Identity => "Android Use cannot find the enrolled device. Run au doctor.",

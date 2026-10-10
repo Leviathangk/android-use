@@ -36,32 +36,54 @@ fn serve(mut handle: impl FnMut(Value) -> Option<Value>) -> Result<()> {
     }
 }
 
+/// MCP protocol revisions this server speaks, newest first.
+const PROTOCOL_VERSIONS: [&str; 3] = ["2025-06-18", "2025-03-26", "2024-11-05"];
+
+/// Server-level guidance that MCP clients may place in the agent's context.
+const INSTRUCTIONS: &str = "Android Use controls one real Android device. android.read looks without changing anything; android.act changes the device. \
+Start with android.read screen (or page for the Chrome tab) when the state is unknown. Act on a label you saw, in straight double quotes: tap \"Wi-Fi\", type \"hello\" in \"Message\". \
+Each successful action reports what is on screen now, so a separate read is rarely needed. Join a few steps with then. \
+stale means nothing ran: retry. partial or unknown means read the screen before changing anything again; never repeat blindly. \
+Ask the user before purchases, sending messages, account or security changes, deleting data, or using the camera, microphone, location, or screen recording.";
+
 fn rpc(engine: &mut Engine, v: Value) -> Option<Value> {
-    let id = v.get("id").cloned();
-    let method = v.get("method").and_then(Value::as_str).unwrap_or("");
-    id.as_ref()?;
-    let result = match method {
-        "initialize" => Ok(json!({"protocolVersion":"2025-06-18","capabilities":{"tools":{}},"serverInfo":{"name":"android-use","version":env!("CARGO_PKG_VERSION")}})),
-        "tools/list" => Ok(json!({"tools":tool_schemas()})),
-        "tools/call" => {
-            let p = v.get("params").cloned().unwrap_or(Value::Null);
-            let name = p.get("name").and_then(Value::as_str).unwrap_or("");
-            let args = p.get("arguments").cloned().unwrap_or_else(|| json!({}));
-            if args.get("command").is_some() {
-                let request_identity = id.as_ref().map(|value| serde_json::to_string(value).unwrap_or_default());
-                Ok(model_result(new_call(engine, name, args, request_identity.as_deref())))
-            } else {
-                call(engine, name, args)
-                    .map(|data| json!({"structuredContent":data,"content":[],"isError":false}))
-                    .or_else(|e| Ok(json!({"structuredContent":e.json(),"content":[],"isError":true})))
-            }
-        }
-        _ => Err(Error::new(Code::Unsupported, "unknown JSON-RPC method")),
+    // Notifications carry no id and never get a reply.
+    let id = v.get("id").cloned()?;
+    let params = v.get("params").cloned().unwrap_or(Value::Null);
+    let result = match v.get("method").and_then(Value::as_str).unwrap_or("") {
+        "initialize" => initialize(params.get("protocolVersion").and_then(Value::as_str)),
+        "ping" => json!({}),
+        "tools/list" => json!({"tools":tool_schemas()}),
+        "tools/call" => call_tool(engine, &id, &params),
+        _ => return Some(json!({"jsonrpc":"2.0","id":id,"error":{"code":-32601,"message":"method not found"}})),
     };
-    Some(match result {
-        Ok(r) => json!({"jsonrpc":"2.0","id":id,"result":r}),
-        Err(e) => json!({"jsonrpc":"2.0","id":id,"error":{"code":-32602,"message":e.message,"data":{"e":e.code.wire()}}}),
+    Some(json!({"jsonrpc":"2.0","id":id,"result":result}))
+}
+
+fn initialize(requested: Option<&str>) -> Value {
+    let version = requested.filter(|version| PROTOCOL_VERSIONS.contains(version)).unwrap_or(PROTOCOL_VERSIONS[0]);
+    json!({
+        "protocolVersion": version,
+        "capabilities": {"tools": {}},
+        "serverInfo": {"name": "android-use", "title": "Android Use", "version": env!("CARGO_PKG_VERSION")},
+        "instructions": INSTRUCTIONS,
     })
+}
+
+fn call_tool(engine: &mut Engine, id: &Value, params: &Value) -> Value {
+    let name = params.get("name").and_then(Value::as_str).unwrap_or("");
+    let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
+    if args.get("command").is_some() {
+        // A resent JSON-RPC id maps to the same operation id, so the journal
+        // returns the earlier outcome (or `unknown`) instead of acting twice.
+        let identity = serde_json::to_string(id).unwrap_or_default();
+        return model_result(new_call(engine, name, args, Some(&identity)));
+    }
+    let (data, is_error) = match call(engine, name, args) {
+        Ok(data) => (data, false),
+        Err(error) => (error.json(), true),
+    };
+    json!({"structuredContent":data,"content":[{"type":"text","text":data.to_string()}],"isError":is_error})
 }
 
 fn direct(engine: &mut Engine, v: Value) -> Option<Value> {
@@ -96,10 +118,10 @@ fn model_result(result: Result<ModelResponse>) -> Value {
 
 fn model_json(response: &ModelResponse) -> Value {
     let mut content = vec![json!({"type":"text","text":response.text})];
-    if let Some(image) = &response.image {
+    if let Some(image) = response.image.as_ref().filter(|image| image.mime_type.starts_with("image/")) {
         content.push(json!({"type":"image","data":STANDARD.encode(image.bytes.as_ref()),"mimeType":image.mime_type}));
     }
-    json!({"content":content,"isError":false})
+    json!({"content":content,"isError":response.failed})
 }
 fn call(engine: &mut Engine, name: &str, args: Value) -> Result<Value> {
     match name {
@@ -173,6 +195,7 @@ mod tests {
         let response = ModelResponse {
             text: "Captured the screen. The image is attached.".into(),
             image: Some(crate::engine::ModelImage { bytes: b"png".to_vec().into(), mime_type: "image/png" }),
+            failed: false,
         };
         let value = model_json(&response);
         assert!(value.get("structuredContent").is_none());
@@ -188,5 +211,33 @@ mod tests {
         assert_eq!(value.as_array().unwrap().iter().map(|tool| tool["name"].as_str().unwrap()).collect::<Vec<_>>(), vec!["android.read", "android.act"]);
         assert!(parse_read(json!({"q":"status"})).is_ok());
         assert!(parse_act_command("tap \"Save\"").is_ok());
+    }
+
+    fn request(engine: &mut Engine, value: Value) -> Value {
+        rpc(engine, value).unwrap()
+    }
+
+    #[test]
+    fn mcp_lifecycle_works_without_a_device() {
+        let d = tempfile::tempdir().unwrap();
+        let mut engine = Engine::at(crate::device::Paths::at(d.path().to_path_buf()).unwrap()).unwrap();
+        let init = request(&mut engine, json!({"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}));
+        assert_eq!(init["result"]["protocolVersion"], "2025-03-26");
+        assert!(init["result"]["instructions"].as_str().unwrap().contains("android.read"));
+        let future = request(&mut engine, json!({"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2099-01-01"}}));
+        assert_eq!(future["result"]["protocolVersion"], PROTOCOL_VERSIONS[0]);
+        assert!(rpc(&mut engine, json!({"jsonrpc":"2.0","method":"notifications/initialized"})).is_none());
+        assert_eq!(request(&mut engine, json!({"jsonrpc":"2.0","id":2,"method":"ping"}))["result"], json!({}));
+        assert_eq!(request(&mut engine, json!({"jsonrpc":"2.0","id":3,"method":"resources/list"}))["error"]["code"], -32601);
+        assert_eq!(request(&mut engine, json!({"jsonrpc":"2.0","id":4,"method":"tools/list"}))["result"]["tools"].as_array().unwrap().len(), 2);
+        let bad = request(&mut engine, json!({"jsonrpc":"2.0","id":5,"method":"tools/call","params":{"name":"android.act","arguments":{"command":"tap Save"}}}));
+        assert_eq!(bad["result"]["isError"], true);
+        assert!(bad["result"]["content"][0]["text"].as_str().unwrap().contains("tap \"LABEL\""));
+    }
+
+    #[test]
+    fn non_image_media_is_never_sent_as_image_content() {
+        let response = ModelResponse { text: "Saved.".into(), image: Some(crate::engine::ModelImage { bytes: b"RIFF".to_vec().into(), mime_type: "audio/wav" }), failed: false };
+        assert_eq!(model_json(&response)["content"].as_array().unwrap().len(), 1);
     }
 }

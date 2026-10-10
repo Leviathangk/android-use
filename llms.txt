@@ -5,7 +5,9 @@
 - Start: README.md
 - Agent guide: AGENTS.md
 - Setup: docs/agents/quickstart.md
+- MCP client configs: docs/agents/clients.md
 - Recovery: docs/agents/install.md
 - Command contract: docs/reference/agent-protocol.md
-- CLI: docs/reference/cli.md
+- CLI (au read / au act for shell agents): docs/reference/cli.md
+- Architecture: docs/concepts/architecture.md
 - Security: SECURITY.md

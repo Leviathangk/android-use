@@ -6,9 +6,7 @@ Start with:
 au doctor
 ```
 
-It separates required checks from optional capabilities and tells you the next Android-side action.
-
-Agents should use `au doctor --json`. The response includes a `phase`, a machine-readable `next_step`, and the exact `resume` command for the next setup boundary.
+It separates required checks from optional capabilities and tells you the next Android-side action. Agents should use `au doctor --json`: it includes a `phase`, a machine-readable `next_step`, and the exact `resume` command.
 
 ## No device appears
 
@@ -20,24 +18,42 @@ Agents should use `au doctor --json`. The response includes a `phase`, a machine
 
 ## More than one device appears
 
-Disconnect extras or explicitly run `au enroll ENDPOINT`. A server session remains fixed to the enrolled hardware identity.
+Disconnect extras or run `au enroll ENDPOINT`. A server stays bound to the enrolled hardware identity.
 
 ## Setup opened Accessibility but did not finish
 
-On the Android screen that setup opened, tap **Android Use**, turn it on, and approve Android's warning. If your device moved the page, look under **Installed apps** or **Downloaded apps**, then run `au setup` once more.
+On the screen setup opened, tap **Android Use**, turn it on, and approve Android's warning. If your device moved the page, look under **Installed apps** or **Downloaded apps**, then run `au setup` again. `au status` reports `Accessibility control is off` until this is done.
+
+## The agent's MCP tools fail
+
+The server starts even without a device, so the tool result explains the problem. Common ones:
+
+- *Android platform tools (adb) were not found*: install Platform-Tools or set `AU_ADB`.
+- *The enrolled Android device is not connected*: reconnect and unlock it.
+- *Accessibility service is off*: enable it as above.
+
+If the client cannot start the server at all, check that its configuration uses the absolute path to `au` and the arguments `serve --mcp` ([client setup](agents/clients.md)).
+
+## "No item labeled … is on the current screen"
+
+The label differs from what Android exposes. The result lists the visible labels; use one exactly, add `number N` for duplicates, or `scroll down` if the item is below the fold. Apps that draw their own UI (games, some cross-platform apps) expose little text; the attached screen image and `tap point X Y` are the fallback.
 
 ## Chrome is unavailable
 
-Install or update Google Chrome on Android and open it once. Android Use uses Chrome's local debugging socket; it does not control arbitrary browsers through CDP.
+Install or update Google Chrome on Android and open it once. Android Use uses Chrome's local debugging socket; it does not control other browsers.
 
 ## The agent reports `stale`
 
-The interface changed after it was observed. This is expected safety behavior. Observe once, use the new generation and refs, then rebuild the plan.
+The screen changed between reading and acting, so nothing ran. Retry the same command; Android Use re-reads the screen itself.
 
-## A plan is `partial` or `unknown`
+## A command is `partial` or `unknown`
 
-Do not retry. Observe the device and determine what already happened. `partial` means at least one mutation ran; `unknown` means the host cannot prove the final outcome.
+Do not retry the whole command. Read the screen and work out what already happened. `partial` means at least one change ran; `unknown` means the host cannot prove whether the command ran.
+
+## Notifications are empty
+
+`notifications` needs notification access: open the Android Use app on the device and tap **Open notification access settings**. Notifications posted before access was granted are not listed.
 
 ## Optional capture is unavailable
 
-Run `au capabilities`. Android permissions, hardware, and process-local screen-record approval can differ even when normal UI control is ready.
+Run `au read capabilities`. Camera, microphone, and location need Android permission; screen recording needs approval in the Android Use app for the current helper process.

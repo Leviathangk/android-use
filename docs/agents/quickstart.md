@@ -1,12 +1,14 @@
 # Agent quickstart
 
-Install the host and helper with `au setup`, approve Android Use under Settings → Accessibility, then confirm with `au doctor`. Start a local stdio MCP server:
+1. Run `au setup` with one unlocked, USB-debugging-authorized device and approve Settings → Accessibility → Android Use. `au doctor` confirms readiness.
+2. Register the MCP server: command = absolute path to `au`, arguments = `serve --mcp`. For Claude Code:
 
-```text
-au serve --mcp
-```
+   ```bash
+   claude mcp add android-use --scope user -- /ABSOLUTE/PATH/TO/au serve --mcp
+   ```
 
-The agent receives `android.read` and `android.act`, each with one required `command` string. Try:
+   Codex, Cursor, VS Code, and others: [client setup](clients.md).
+3. Try it:
 
 ```text
 android.read: status
@@ -14,4 +16,4 @@ android.read: screen
 android.act: tap "Settings"
 ```
 
-Use `page ...` for Chrome content. Read only when state is unknown, act by label, and read after `partial` or `unknown`; never replay an uncertain mutation. For installation, permissions, and repair see [install](install.md). For exact grammar see [agent protocol](../reference/agent-protocol.md).
+Use `page ...` commands for Chrome content. Actions report the resulting screen, so read only when the state is unknown. After `partial` or `unknown`, read before changing anything; never replay an uncertain action. Installation and repair: [install](install.md). Grammar and results: [agent protocol](../reference/agent-protocol.md).

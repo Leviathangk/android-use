@@ -21,6 +21,21 @@ jobs:
         with: { gradle-version: '9.1.0' }
       - run: gradle --no-daemon :app:testDebugUnitTest :app:assembleRelease
         working-directory: device
+  helper-format:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-java@c5195efecf7bdfc987ee8bae7a71cb8b11521c00
+        with: { distribution: temurin, java-version: '21' }
+      - name: Check helper Java formatting (google-java-format --aosp)
+        shell: bash
+        run: |
+          jar="$RUNNER_TEMP/google-java-format.jar"
+          curl -fsSL -o "$jar" https://repo1.maven.org/maven2/com/google/googlejavaformat/google-java-format/1.37.0/google-java-format-1.37.0-all-deps.jar
+          echo "834b2a0c38cb774953322a84b5ca3f2f40dd3156650b3cd44d3b744345962f7a  $jar" | sha256sum -c -
+          exports=""
+          for pkg in api code file parser tree util; do exports="$exports --add-exports=jdk.compiler/com.sun.tools.javac.$pkg=ALL-UNNAMED"; done
+          java $exports -jar "$jar" --aosp --dry-run --set-exit-if-changed $(git ls-files 'device/*.java')
   installer:
     runs-on: ubuntu-24.04
     steps:

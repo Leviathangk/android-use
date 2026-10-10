@@ -1,8 +1,8 @@
 use crate::{
-    api::{BrowserOp, BrowserPlan, BrowserPredicate, BrowserRead, Capture, Code, Error, Op, Plan, Result, Target},
+    api::{normalized, BrowserOp, BrowserPlan, BrowserPredicate, BrowserRead, Capture, Code, Error, Op, Plan, Result, Target},
     bridge::Bridge,
     device::{Adb, Device},
-    resolve::{pick, Candidate},
+    resolve::choose,
 };
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use serde_json::{json, Value};
@@ -20,6 +20,8 @@ const MAX_TEXT: usize = 12_000;
 const MAX_TABS: usize = 50;
 const MAX_SCREENSHOT: usize = 8 * 1024 * 1024;
 const DOM_SELECTOR: &str = "a,button,input,textarea,select,[role=button],[onclick]";
+const HTTP_READ: Duration = Duration::from_secs(5);
+const KEY_UP: &str = "key-up";
 
 #[derive(Debug, Clone)]
 struct Tab {
@@ -87,8 +89,7 @@ impl Browser {
     }
 
     pub fn tab_target(&self, target: &Target) -> Result<Box<str>> {
-        let candidates: Vec<_> = self.tabs.iter().filter(|tab| tab.kind == "page").map(|tab| Candidate::new(tab.id.clone().into_boxed_str(), [&tab.title, &tab.url])).collect();
-        pick(target, &candidates, "tab list")
+        tab_match(&self.tabs, target)
     }
 
     pub fn act(&mut self, plan: &BrowserPlan) -> Result<Outcome> {
@@ -116,26 +117,23 @@ impl Browser {
         let mut mutations = 0u8;
         let mut artifact = None;
         for (index, op) in plan.ops.iter().enumerate() {
-            if Instant::now() >= deadline {
-                return Ok(Outcome {
-                    generation: self.generation,
-                    mutations,
-                    at: Some(index as u8),
-                    error: Some(if mutations > 0 { "partial" } else { "timeout" }),
-                    partial: mutations > 0,
-                    artifact,
-                });
-            }
-            let result = self.apply(op, deadline, &mut artifact);
+            let result = if Instant::now() >= deadline { Err("timeout") } else { self.apply(op, deadline, &mut artifact) };
             match result {
                 Ok(()) => {
                     if op.mutates() {
                         mutations = mutations.saturating_add(1);
                     }
+                    // Refs name the old document; later ops in this plan must not reach the next one.
+                    if matches!(op, BrowserOp::Navigate(_) | BrowserOp::Back | BrowserOp::Forward | BrowserOp::Reload) {
+                        self.nodes.clear();
+                    }
                 }
                 Err(error) => {
-                    let partial = mutations > 0;
-                    return Ok(Outcome { generation: self.generation, mutations, at: Some(index as u8), error: Some(if partial { "partial" } else { error }), partial, artifact });
+                    // A key whose keyUp failed was still delivered; uncertain steps stay `unknown` so the agent observes first.
+                    let mutations = mutations.saturating_add(u8::from(error == KEY_UP));
+                    let error = if error == KEY_UP { "unknown" } else { error };
+                    let error = if mutations > 0 && error != "unknown" { "partial" } else { error };
+                    return Ok(Outcome { generation: self.generation, mutations, at: Some(index as u8), error: Some(error), partial: mutations > 0, artifact });
                 }
             }
         }
@@ -166,33 +164,15 @@ impl Browser {
 
     fn apply(&mut self, op: &BrowserOp, deadline: Instant, artifact: &mut Option<Vec<u8>>) -> std::result::Result<(), &'static str> {
         match op {
-            BrowserOp::Navigate(url) => {
-                self.command("Page.navigate", json!({"url":url}))?;
-                Ok(())
-            }
-            BrowserOp::Back => {
-                self.command("Runtime.evaluate", json!({"expression":"history.back()"}))?;
-                Ok(())
-            }
-            BrowserOp::Forward => {
-                self.command("Runtime.evaluate", json!({"expression":"history.forward()"}))?;
-                Ok(())
-            }
-            BrowserOp::Reload => {
-                self.command("Page.reload", json!({"ignoreCache":false}))?;
-                Ok(())
-            }
+            BrowserOp::Navigate(url) => self.command("Page.navigate", json!({"url":url})).map(drop),
+            BrowserOp::Back => self.command("Runtime.evaluate", json!({"expression":"history.back()"})).map(drop),
+            BrowserOp::Forward => self.command("Runtime.evaluate", json!({"expression":"history.forward()"})).map(drop),
+            BrowserOp::Reload => self.command("Page.reload", json!({"ignoreCache":false})).map(drop),
             BrowserOp::Click(r) => self.dom_action(*r, "click", None),
             BrowserOp::Focus(r) => self.dom_action(*r, "focus", None),
             BrowserOp::Text(r, text) => self.dom_action(*r, "text", Some(text)),
-            BrowserOp::Key(key) => {
-                self.key(key)?;
-                Ok(())
-            }
-            BrowserOp::Scroll(px) => {
-                self.eval_value(&format!("window.scrollBy(0,{px});true"))?;
-                Ok(())
-            }
+            BrowserOp::Key(key) => self.key(key),
+            BrowserOp::Scroll(px) => self.eval_value(&format!("window.scrollBy(0,{px});true")).map(drop),
             BrowserOp::Wait(predicate, ms) => {
                 let end = deadline.min(Instant::now() + Duration::from_millis(*ms as u64));
                 while Instant::now() < end {
@@ -216,22 +196,19 @@ impl Browser {
                 });
                 *artifact = Some(match captured {
                     Ok(bytes) if !bytes.is_empty() && bytes.len() <= MAX_SCREENSHOT => bytes,
-                    Ok(_) | Err(_) => self.helper_screenshot()?,
+                    Ok(_) | Err(_) => self.helper_screenshot(deadline)?,
                 });
                 Ok(())
             }
-            BrowserOp::Select(id) => {
-                self.activate(id)?;
-                Ok(())
-            }
+            BrowserOp::Select(id) => self.activate(id, deadline),
             // Close and New are mutations whose effect is confirmed by polling the
             // tab list. Once the request is sent, a failure to confirm means the
             // tab may have changed, so the outcome is reported as uncertain.
             BrowserOp::Close(id) => {
-                http_get(self.port, &format!("/json/close/{id}")).map_err(|_| "unknown")?;
+                http_get(self.port, &format!("/json/close/{id}"), remaining(deadline)).map_err(|_| "unknown")?;
                 let end = deadline.min(Instant::now() + Duration::from_secs(3));
                 while Instant::now() < end {
-                    if !self.list_tabs().map_err(|_| "unknown")?.iter().any(|tab| tab.id == id.as_ref()) {
+                    if !self.list_tabs(remaining(end)).map_err(|_| "unknown")?.iter().any(|tab| tab.id == id.as_ref()) {
                         self.cdp = None;
                         self.sync().map_err(|_| "unknown")?;
                         return Ok(());
@@ -243,11 +220,11 @@ impl Browser {
             BrowserOp::New(url) => {
                 let endpoint = self.browser_endpoint().map_err(|_| "helper")?;
                 let mut cdp = Cdp::connect(self.port, &endpoint).map_err(|_| "helper")?;
-                let value = cdp.command("Target.createTarget", json!({"url":url})).map_err(|error| if error.code == Code::Helper { "helper" } else { "unknown" })?;
+                let value = cdp.command("Target.createTarget", json!({"url":url})).map_err(|error| if error.code == Code::Unknown { "unknown" } else { "helper" })?;
                 let id = value.get("targetId").and_then(Value::as_str).filter(|id| !id.is_empty() && id.len() <= 128).ok_or("unknown")?.to_owned();
                 let end = deadline.min(Instant::now() + Duration::from_secs(5));
                 while Instant::now() < end {
-                    let tabs = self.list_tabs().map_err(|_| "unknown")?;
+                    let tabs = self.list_tabs(remaining(end)).map_err(|_| "unknown")?;
                     if tabs.iter().any(|tab| tab.id == id && tab.kind == "page") {
                         self.selected = id;
                         self.cdp = None;
@@ -262,7 +239,7 @@ impl Browser {
     }
 
     fn browser_endpoint(&self) -> Result<String> {
-        let body = http_get(self.port, "/json/version")?;
+        let body = http_get(self.port, "/json/version", HTTP_READ)?;
         let value: Value = serde_json::from_str(&body).map_err(|_| Error::new(Code::Protocol, "Chrome version response was invalid"))?;
         let endpoint = value.get("webSocketDebuggerUrl").and_then(Value::as_str).ok_or_else(|| Error::new(Code::Protocol, "Chrome browser endpoint was missing"))?;
         if endpoint.len() > 2048 || !endpoint.starts_with("ws://") || !endpoint.contains("/devtools/browser") {
@@ -273,11 +250,14 @@ impl Browser {
 
     /// Fallback when Chrome cannot capture its own surface: a whole-screen
     /// capture through the Android helper.
-    fn helper_screenshot(&self) -> std::result::Result<Vec<u8>, &'static str> {
+    fn helper_screenshot(&self, deadline: Instant) -> std::result::Result<Vec<u8>, &'static str> {
+        let left = || deadline.checked_duration_since(Instant::now()).filter(|left| !left.is_zero()).ok_or("timeout");
+        left()?;
         let mut bridge = Bridge::connect(self.adb.clone(), self.device.clone()).map_err(|_| "helper")?;
+        bridge.set_read_timeout(left()?).map_err(|_| "helper")?;
         let (generation, _) = bridge.status().map_err(|_| "helper")?;
         let id = format!("browser-shot-{:x}", nonce()).into_boxed_str();
-        let plan = Plan { id, generation, deadline_ms: 8000, max_mutations: 0, ops: vec![Op::Capture(Capture::Screen)].into_boxed_slice() };
+        let plan = Plan { id, generation, deadline_ms: left()?.as_millis().min(8000) as u32, max_mutations: 0, ops: vec![Op::Capture(Capture::Screen)].into_boxed_slice() };
         let receipt = bridge.act(&plan).map_err(|_| "helper")?;
         if receipt.ok == 0 {
             return Err(match receipt.e.as_deref() {
@@ -321,7 +301,7 @@ impl Browser {
     fn key(&mut self, key: &str) -> std::result::Result<(), &'static str> {
         let params = json!({"type":"keyDown","key":key,"code":key});
         self.command("Input.dispatchKeyEvent", params)?;
-        self.command("Input.dispatchKeyEvent", json!({"type":"keyUp","key":key,"code":key}))?;
+        self.command("Input.dispatchKeyEvent", json!({"type":"keyUp","key":key,"code":key})).map_err(|_| KEY_UP)?;
         Ok(())
     }
 
@@ -382,7 +362,7 @@ impl Browser {
     }
 
     fn sync(&mut self) -> Result<()> {
-        let tabs = self.list_tabs()?;
+        let tabs = self.list_tabs(HTTP_READ)?;
         let selected = self.selected_tab(&tabs)?.clone();
         let signature = format!("{}|{}|{}", selected.id, selected.url, selected.title);
         if self.signature.as_deref() != Some(&signature) {
@@ -404,8 +384,8 @@ impl Browser {
         Ok(())
     }
 
-    fn list_tabs(&self) -> Result<Vec<Tab>> {
-        let body = http_get(self.port, "/json")?;
+    fn list_tabs(&self, read: Duration) -> Result<Vec<Tab>> {
+        let body = http_get(self.port, "/json", read)?;
         let raw: Vec<Value> = serde_json::from_str(&body).map_err(|_| Error::new(Code::Protocol, "Chrome tab list was invalid"))?;
         let mut tabs = Vec::new();
         for item in raw.into_iter().take(128) {
@@ -431,19 +411,21 @@ impl Browser {
             .ok_or_else(|| Error::new(Code::Helper, "Chrome has no inspectable page target"))
     }
 
-    fn activate(&mut self, id: &str) -> std::result::Result<(), &'static str> {
-        let response = http_get(self.port, &format!("/json/activate/{id}")).map_err(|_| "helper")?;
+    /// Once the request may have reached Chrome, only an explicit refusal is `helper`.
+    fn activate(&mut self, id: &str, deadline: Instant) -> std::result::Result<(), &'static str> {
+        let response = http_get(self.port, &format!("/json/activate/{id}"), remaining(deadline)).map_err(|error| if error.code == Code::Helper { "helper" } else { "unknown" })?;
         if !response.to_ascii_lowercase().contains("activated") {
             return Err("helper");
         }
         self.selected = id.into();
         self.cdp = None;
-        self.sync().map_err(|_| "helper")
+        self.sync().map_err(|_| "unknown")
     }
 
     fn command(&mut self, method: &str, params: Value) -> std::result::Result<Value, &'static str> {
         let result = self.cdp.as_mut().ok_or("helper")?.command(method, params);
-        if result.is_err() {
+        // A rejected command leaves the socket usable; anything else may not.
+        if result.as_ref().is_err_and(|error| error.code != Code::Args) {
             self.cdp = None;
         }
         // A lost reply after the request was written means Chrome may have acted.
@@ -477,6 +459,17 @@ impl Browser {
             self.port = 0;
         }
     }
+}
+
+/// Tabs match by exact title ("untitled" when empty, as listed) or exact URL,
+/// then by title prefix, since listed titles are truncated. Never by URL
+/// substring: a loose match could select or close an unrelated tab.
+fn tab_match(tabs: &[Tab], target: &Target) -> Result<Box<str>> {
+    let needle = normalized(&target.label);
+    let label = |tab: &Tab| normalized(if tab.title.is_empty() { "untitled" } else { &tab.title });
+    let ids = |test: &dyn Fn(&Tab) -> bool| tabs.iter().filter(|tab| tab.kind == "page" && !needle.is_empty() && test(tab)).map(|tab| tab.id.as_str().into()).collect::<Vec<_>>();
+    let exact = ids(&|tab| label(tab) == needle || normalized(&tab.url) == needle);
+    choose(target, if exact.is_empty() { ids(&|tab| label(tab).starts_with(&needle)) } else { exact }, "tab list")
 }
 
 fn dom_action_expression(stable_id: u64, command: &str) -> String {
@@ -534,8 +527,8 @@ impl Cdp {
     }
     /// Errors before the request is written are `Helper`: nothing ran. Once it
     /// is written, a lost or unreadable reply is `Unknown`, because Chrome may
-    /// already have acted. A reply that carries a CDP error is `Helper`: Chrome
-    /// rejected the command.
+    /// already have acted. A reply that carries a CDP error is `Args`: Chrome
+    /// rejected the command and the socket is still healthy.
     fn command(&mut self, method: &str, params: Value) -> Result<Value> {
         self.id = self.id.checked_add(1).ok_or_else(|| Error::new(Code::Sequence, "CDP sequence exhausted"))?;
         let id = self.id;
@@ -548,16 +541,21 @@ impl Cdp {
                 continue;
             }
             if value.get("error").is_some() {
-                return Err(Error::new(Code::Helper, "CDP command failed"));
+                return Err(Error::new(Code::Args, "CDP command failed"));
             }
             return Ok(value.get("result").cloned().unwrap_or(Value::Null));
         }
     }
 }
 
-fn http_get(port: u16, path: &str) -> Result<String> {
+/// Time left before `deadline`, as a read timeout of at most `HTTP_READ`.
+fn remaining(deadline: Instant) -> Duration {
+    deadline.saturating_duration_since(Instant::now()).clamp(Duration::from_millis(1), HTTP_READ)
+}
+
+fn http_get(port: u16, path: &str, read: Duration) -> Result<String> {
     let mut stream = TcpStream::connect_timeout(&SocketAddr::new(IpAddr::V4(Ipv4Addr::LOCALHOST), port), Duration::from_secs(3))?;
-    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    stream.set_read_timeout(Some(read))?;
     stream.set_write_timeout(Some(Duration::from_secs(3)))?;
     write!(stream, "GET {path} HTTP/1.1\r\nHost: 127.0.0.1:{port}\r\nConnection: close\r\n\r\n")?;
     let response = read_http(&mut stream)?;
@@ -738,7 +736,7 @@ mod tests {
             stream.flush().unwrap();
             thread::sleep(Duration::from_millis(50));
         });
-        assert_eq!(http_get(port, "/json/version").unwrap(), "hello");
+        assert_eq!(http_get(port, "/json/version", HTTP_READ).unwrap(), "hello");
         worker.join().unwrap();
     }
 
@@ -771,6 +769,60 @@ mod tests {
         });
         let mut stream = TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap();
         assert_eq!(read_ws(&mut stream).unwrap(), b"onetwo");
+        worker.join().unwrap();
+    }
+
+    #[test]
+    fn tabs_match_exact_then_title_prefix_never_url_substring() {
+        let tab = |id: &str, title: &str, url: &str| Tab { id: id.into(), kind: "page".into(), title: title.into(), url: url.into(), websocket: None };
+        let tabs = [tab("a", "Results for bread", "https://www.google.com/search?q=search+tips"), tab("b", "", "about:blank")];
+        let find = |label: &str| tab_match(&tabs, &Target { label: label.into(), ordinal: None }).map(|id| id.to_string());
+        assert_eq!(find("search").unwrap_err().code, Code::Missing);
+        assert_eq!((find("untitled").unwrap(), find("about:blank").unwrap(), find("Results for\u{2026}").unwrap()), ("b".into(), "b".into(), "a".into()));
+    }
+
+    /// Runs `ops` against a fake Chrome page that answers request n with `reply(method, n)`; `None` drops it.
+    fn fake_chrome(ops: Vec<BrowserOp>, reply: fn(&str, u8) -> Option<Value>) -> (Outcome, Browser) {
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            for n in 0.. {
+                let Ok(request) = read_ws(&mut stream).map(|frame| serde_json::from_slice::<Value>(&frame).unwrap()) else { return };
+                let Some(mut body) = reply(request["method"].as_str().unwrap(), n) else { return };
+                body["id"] = request["id"].clone();
+                write_ws(&mut stream, &body.to_string()).unwrap();
+            }
+        });
+        let (stream, device) = (TcpStream::connect((Ipv4Addr::LOCALHOST, port)).unwrap(), Device { endpoint: "t".into(), hardware: "t".into() });
+        let (cdp, selected, nodes, dom_fingerprint) = (Some(Cdp { stream, id: 0 }), "t".to_owned(), vec![9], Some(String::new()));
+        let mut b = Browser { adb: Adb::for_tests(), device, port: 0, cdp, tabs: vec![], selected, signature: None, generation: 1, nodes, nodes_generation: 1, dom_fingerprint };
+        (b.act_inner(&BrowserPlan { id: "p".into(), generation: 1, deadline_ms: 5000, max_mutations: 16, ops: ops.into_boxed_slice() }).unwrap(), b)
+    }
+
+    #[test]
+    fn uncertain_steps_are_unknown_and_refs_and_sockets_are_kept_honest() {
+        // keyDown accepted, keyUp rejected: the key was delivered and the socket stays usable.
+        let (outcome, browser) = fake_chrome(vec![BrowserOp::Key("Enter".into())], |_, n| Some(if n == 0 { json!({"result":{}}) } else { json!({"error":{}}) }));
+        assert_eq!((outcome.mutations, outcome.error, outcome.partial, browser.cdp.is_some()), (1, Some("unknown"), true, true));
+        // A step whose reply is lost after an earlier mutation stays unknown rather than partial.
+        let (outcome, _) = fake_chrome(vec![BrowserOp::Scroll(100), BrowserOp::Key("Enter".into())], |_, n| (n == 0).then(|| json!({"result":{}})));
+        assert_eq!((outcome.mutations, outcome.at, outcome.error), (1, Some(1), Some("unknown")));
+        // Node refs do not survive a navigation inside the same plan.
+        let (outcome, _) = fake_chrome(vec![BrowserOp::Reload, BrowserOp::Click(0)], |_, _| Some(json!({"result":{"result":{"value":true}}})));
+        assert_eq!((outcome.mutations, outcome.at, outcome.error), (1, Some(1), Some("partial")));
+        // A rejected best-effort activation still captures through Chrome.
+        let (outcome, _) =
+            fake_chrome(vec![BrowserOp::Screenshot], |method, _| Some(if method == "Page.captureScreenshot" { json!({"result":{"data":"anBn"}}) } else { json!({"error":{}}) }));
+        assert_eq!((outcome.error, outcome.artifact.as_deref()), (None, Some(&b"jpg"[..])));
+        // A lost /json/activate reply may mean the tab was selected.
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        let worker = thread::spawn(move || drop(listener.accept().unwrap().0.read(&mut [0u8; 256])));
+        let (_, mut browser) = fake_chrome(vec![], |_, _| None);
+        browser.port = port;
+        assert_eq!(browser.activate("t2", Instant::now() + Duration::from_secs(2)), Err("unknown"));
+        browser.port = 0;
         worker.join().unwrap();
     }
 

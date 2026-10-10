@@ -15,7 +15,7 @@ Generated from `computer/src/spec.rs`; edit the table, then run `cargo xtask doc
 
 ## android_act
 
-Join up to 16 steps with `then`. Quote labels as `screen` shows them; add `number N` for a duplicate. N is 0-30. `tap point` and `swipe` use the attached image's pixels, only after a label is missing.
+Join up to 16 steps with `then`. Quote names as `screen` shows them; `Name#2` is `"Name" number 2`. N is 0-30. `tap point` and `swipe` use the attached image's pixels, only after a label is missing.
 
 - tap "LABEL" [number N]
 - toggle "LABEL"

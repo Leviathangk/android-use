@@ -47,7 +47,7 @@ use Step::{Act, Read, Until};
 
 const TASKS: &[Task] = &[
     Task { name: "status_and_screen", reset: None, steps: &[Read("status", "Ready"), Read("screen", "")] },
-    Task { name: "toggle_switch", reset: Some(AUBENCH), steps: &[Act("open app \"AU Benchmark Fixture\"", "Done"), Act("tap \"Benchmark toggle\"", "on switch")] },
+    Task { name: "toggle_switch", reset: Some(AUBENCH), steps: &[Act("open app \"AU Benchmark Fixture\"", "Done"), Act("tap \"Benchmark toggle\"", "=on")] },
     Task {
         name: "fill_submit_form",
         reset: Some(AUBENCH),
@@ -98,7 +98,7 @@ const TASKS: &[Task] = &[
         steps: &[
             Act("open app \"Settings\"", "Done"),
             Act("tap \"Search Settings\"", "Search"),
-            Act("type \"battery\" in \"Search settings\" then wait for text \"Battery usage\" up to 8 seconds", "Typed"),
+            Act("type \"battery\" in \"Search settings\" then wait for text \"Battery usage\" up to 8 seconds", "Done"),
             Act("tap \"Use Battery Saver\"", "Done"),
         ],
     },
@@ -182,6 +182,8 @@ impl Drop for Mcp {
 }
 
 struct Run {
+    /// Every call as `[tool, command, result]`, for `BENCH_TRACE` (real tokenizer counts).
+    trace: Vec<Value>,
     ok: bool,
     calls: usize,
     wall_ms: u128,
@@ -200,12 +202,14 @@ fn run_task(mcp: &mut Mcp, task: &Task, latency: &mut BTreeMap<String, Vec<u128>
     }
     let started = Instant::now();
     let (mut calls, mut result_tokens, mut output_tokens, mut ok) = (0, 0, 0, true);
+    let mut trace = Vec::new();
     let mut turn = |mcp: &mut Mcp, tool: &str, command: &str, calls: &mut usize| -> Result<Call, String> {
         let call = mcp.call(tool, command)?;
         *calls += 1;
         if env::var_os("BENCH_VERBOSE").is_some() {
             println!("  {tool} {command} -> {}ms {}", call.ms, call.text.lines().take(3).collect::<Vec<_>>().join(" | "));
         }
+        trace.push(json!([tool, command, call.text]));
         result_tokens += approx_tokens(call.text.len());
         output_tokens += approx_tokens(command.len() + 40);
         latency.entry(format!("{tool} {}", command.split(' ').next().unwrap_or_default())).or_default().push(call.ms);
@@ -237,7 +241,7 @@ fn run_task(mcp: &mut Mcp, task: &Task, latency: &mut BTreeMap<String, Vec<u128>
             }
         }
     }
-    Ok(Run { ok, calls, wall_ms: started.elapsed().as_millis(), result_tokens, output_tokens })
+    Ok(Run { trace, ok, calls, wall_ms: started.elapsed().as_millis(), result_tokens, output_tokens })
 }
 
 pub fn run(root: &Path) -> Result<(), String> {
@@ -249,6 +253,7 @@ pub fn run(root: &Path) -> Result<(), String> {
     let mut mcp = Mcp::start(&exe)?;
     let mut latency: BTreeMap<String, Vec<u128>> = BTreeMap::new();
     let mut report = Vec::new();
+    let mut traces = Vec::new();
     println!("fixed_tokens_per_turn={}", mcp.fixed_tokens);
     for task in TASKS {
         let results: Vec<Run> = (0..runs).map(|_| run_task(&mut mcp, task, &mut latency)).collect::<Result<_, _>>()?;
@@ -272,6 +277,7 @@ pub fn run(root: &Path) -> Result<(), String> {
             entry["output_tokens"].as_f64().unwrap_or(0.0),
             entry["wall_ms"].as_f64().unwrap_or(0.0)
         );
+        traces.push(json!({"task": task.name, "runs": results.iter().map(|run| json!({"ok": run.ok, "calls": run.trace})).collect::<Vec<_>>()}));
         report.push(entry);
     }
     let mut actions = serde_json::Map::new();
@@ -286,6 +292,9 @@ pub fn run(root: &Path) -> Result<(), String> {
     let out = json!({"fixed_tokens": mcp.fixed_tokens, "tasks": report, "latency": actions, "success": success, "attempts": attempts});
     let path = env::var_os("BENCH_OUT").map(PathBuf::from).unwrap_or_else(|| root.join("target/benchmark-live.json"));
     fs::write(&path, serde_json::to_vec_pretty(&out).map_err(ioe)?).map_err(ioe)?;
+    if let Some(trace) = env::var_os("BENCH_TRACE") {
+        fs::write(trace, serde_json::to_vec(&traces).map_err(ioe)?).map_err(ioe)?;
+    }
     if env::var("BENCH_GATE").is_ok_and(|value| value == "1") {
         gate(&out, env::var_os("BENCH_BASELINE").map(PathBuf::from).ok_or("BENCH_GATE=1 needs BENCH_BASELINE")?)?;
     }

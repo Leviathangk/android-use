@@ -7,8 +7,9 @@ pub const READ_TOOL: &str = "android_read";
 pub const ACT_TOOL: &str = "android_act";
 
 /// Sent once at `initialize`; kept to what an agent cannot learn from the tool descriptions.
-pub const INSTRUCTIONS: &str = "Controls one Android device. Read `screen` once if the state is unknown, then act on labels you saw; \
-every action returns the new screen. stale: retry. partial or unknown: read before acting again, never repeat. \
+pub const INSTRUCTIONS: &str = "Controls one Android device. Read `screen` once if the state is unknown, then act on names you saw. \
+Rows are names to quote, with a tag for non-buttons: `sw Wi-Fi=on`, `edit Email=\"x\"`; `Save#2` means `tap \"Save\" number 2`. \
+Every action returns the new screen or only what `Changed:`. stale: retry. partial or unknown: read before acting again, never repeat. \
 Ask first: purchases, messages, account or security changes, deletes, camera, microphone, location, recording.";
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -95,7 +96,7 @@ pub fn read_description() -> String {
 
 pub fn act_description() -> String {
     format!(
-        "Change the device. Join up to 16 steps with `then`. Quote labels exactly as `screen` shows them; add `number N` for a duplicate.\n{}\nOther commands: {READ_TOOL} help",
+        "Change the device. Join up to 16 steps with `then`. Quote names exactly as `screen` shows them.\n{}\nOther commands: {READ_TOOL} help",
         usages(Tool::Act, true).join(" | ")
     )
 }
@@ -116,7 +117,7 @@ pub fn help_text() -> String {
 /// The installed protocol reference, `skills/android-use/references/protocol.md`.
 pub fn protocol_markdown() -> String {
     format!(
-        "# Commands\n\nGenerated from `computer/src/spec.rs`; edit the table, then run `cargo xtask docs --write`.\n\n## {READ_TOOL}\n\n{}\n## {ACT_TOOL}\n\nJoin up to 16 steps with `then`. Quote labels as `screen` shows them; add `number N` for a duplicate. N is 0-30. `tap point` and `swipe` use the attached image's pixels, only after a label is missing.\n\n{}",
+        "# Commands\n\nGenerated from `computer/src/spec.rs`; edit the table, then run `cargo xtask docs --write`.\n\n## {READ_TOOL}\n\n{}\n## {ACT_TOOL}\n\nJoin up to 16 steps with `then`. Quote names as `screen` shows them; `Name#2` is `\"Name\" number 2`. N is 0-30. `tap point` and `swipe` use the attached image's pixels, only after a label is missing.\n\n{}",
         listing(Tool::Read),
         listing(Tool::Act)
     )

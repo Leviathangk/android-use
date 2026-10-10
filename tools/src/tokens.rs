@@ -10,9 +10,9 @@ use serde_json::Value;
 use std::{fs, path::Path};
 
 /// Instructions plus tool definitions, in tokens.
-const FIXED_MAX: usize = 450;
+const FIXED_MAX: usize = 400;
 /// All golden screens rendered, in tokens.
-const SCREENS_MAX: usize = 1000;
+const SCREENS_MAX: usize = 360;
 
 pub fn fixed_tokens() -> Result<usize, String> {
     let tools = serde_json::to_vec(&au::api::tool_schemas()).map_err(ioe)?;

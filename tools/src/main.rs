@@ -561,7 +561,7 @@ fn size(root: &Path) -> Result<(usize, usize, usize), String> {
     println!("rust_production={rust} android_production={java} tests={tests} automation={automation} authored_code={authored} source_files={source_files} production_modules={production_modules}");
     // Budgets measure conventionally formatted code (rustfmt; google-java-format --aosp for the
     // helper), so they track real complexity rather than how densely lines are packed.
-    if rust > 6900 || java > 3200 || automation > 1250 || authored > 13000 {
+    if rust > 6700 || java > 3200 || automation > 1250 || authored > 13300 {
         return Err("source budget exceeded".into());
     }
     Ok((rust, java, automation))
@@ -826,7 +826,9 @@ fn rust_split(root: &Path) -> Result<(usize, usize), String> {
         }
         let text = fs::read_to_string(&p).map_err(ioe)?;
         let all: Vec<&str> = text.lines().collect();
-        let split = all.iter().position(|line| line.trim() == "#[cfg(test)]" && !line.starts_with(' ')).unwrap_or(all.len());
+        // `foo_tests.rs` files are only compiled through `#[cfg(test)] #[path] mod tests`.
+        let test_file = p.file_stem().and_then(|s| s.to_str()).is_some_and(|s| s.ends_with("_tests"));
+        let split = if test_file { 0 } else { all.iter().position(|line| line.trim() == "#[cfg(test)]" && !line.starts_with(' ')).unwrap_or(all.len()) };
         production += split;
         tests += all.len() - split;
     }

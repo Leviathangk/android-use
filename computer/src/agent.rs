@@ -11,22 +11,30 @@ use crate::{
         Predicate, Read, Receipt, Result, Scene, Target, VisualAction, MAX_MUTATIONS, MAX_OPS,
     },
     browser::Browser,
-    compress::{self, ImageSpace, Policy},
+    compress::ImageSpace,
     engine::Engine,
     format::*,
-    marks::{self, Mark},
     resolve, visual,
 };
 use serde_json::{json, Value};
-use std::{collections::HashMap, sync::Arc, thread, time::Duration};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 /// Quiet time the helper waits for after a change before the reply is built, and the longest it
 /// waits: a tap redraws quickly, typed text feeds debounced search lists, a launched app cold-starts.
 const QUIET_MS: u16 = 200;
+/// The quiet window: `QUIET_ENV` when it is a whole number of milliseconds up to `TYPED_QUIET_MS`, else `QUIET_MS`.
+fn quiet_window(value: Option<&str>) -> u16 {
+    value.and_then(|ms| ms.parse().ok()).filter(|ms| (1..=TYPED_QUIET_MS).contains(ms)).unwrap_or(QUIET_MS)
+}
+
+/// Overrides `QUIET_MS` (the quiet window after an action) for sweeps such as `benchmark-live`.
+const QUIET_ENV: &str = "AU_QUIET_MS";
 const TYPED_QUIET_MS: u16 = 900;
 const SETTLE_CAP_MS: u16 = 1500;
 const LAUNCH_CAP_MS: u16 = 5000;
-pub(crate) const SPACE_FILE: &str = "screen-space.json";
 const UNFETCHED: &str = " The captured file could not be retrieved; capture again if you need it.";
 
 #[derive(Clone)]
@@ -52,28 +60,40 @@ pub struct ModelResponse {
 pub(crate) struct AgentState {
     /// Images the agent has seen, by alias (`screen`, `photo`, `page
     /// screenshot`, `crop`), for crop, hash, and difference commands.
-    images: HashMap<Box<str>, Arc<[u8]>>,
+    pub(crate) images: HashMap<Box<str>, Arc<[u8]>>,
     /// The last full screen the agent saw, the baseline for `screen changes`.
-    snapshot: Option<Vec<SemanticRow>>,
+    pub(crate) snapshot: Option<Vec<SemanticRow>>,
     /// Full-resolution captures behind each alias, so `image hash` and
     /// `image difference` compare like with like even when two screens were
     /// compressed to different sizes.
-    originals: HashMap<Box<str>, Arc<[u8]>>,
+    pub(crate) originals: HashMap<Box<str>, Arc<[u8]>>,
     /// Where the last screen image sits on the device, to map its coordinates back.
-    space: Option<ImageSpace>,
+    pub(crate) space: Option<ImageSpace>,
     /// The last screen image's shape, kept after `space` ends so a rotation is still reported.
-    shape: Option<ImageSpace>,
+    pub(crate) shape: Option<ImageSpace>,
     /// Recent replies by request id and command: a resent request gets its first reply
     /// instead of being compiled against the screen it may already have changed.
-    replies: Vec<(Box<str>, Result<ModelResponse>)>,
+    pub(crate) replies: Vec<(Box<str>, Result<ModelResponse>)>,
     /// Point mappings applied while compiling the current command, reported in its result.
-    mapping: Vec<String>,
+    pub(crate) mapping: Vec<String>,
     /// Whether the last target resolved by a containing label rather than an exact one.
-    loose: bool,
+    pub(crate) loose: bool,
+    /// Preflight passed and nothing has failed since; the next act skips it.
+    pub(crate) verified: bool,
+    /// The package and scene generation of the last listing or numbered image; its `eN` handles die with that screen.
+    pub(crate) marked_in: Option<(Box<str>, u64)>,
+    /// A served session limits labels the agent was never shown (see `unseen_label_runs`).
+    pub(crate) strict: bool,
+    /// Normalized labels of every row shown to the agent this session.
+    pub(crate) seen: HashSet<String>,
+    /// The last plan launched an app, so its screen is the one the agent just chose to enter.
+    pub(crate) opened: bool,
+    /// The screen generation the last Android plan ran against, to tell whether it moved.
+    pub(crate) acted_from: u64,
 }
 
 #[derive(Clone, Copy)]
-enum Surface {
+pub(crate) enum Surface {
     Android,
     Browser,
 }
@@ -122,25 +142,6 @@ impl Engine {
         Ok(ModelResponse { text, ..Default::default() })
     }
 
-    fn read_screen(&mut self, full: bool, matching: Option<&str>, delta: bool) -> Result<ModelResponse> {
-        let focus = matching.unwrap_or("");
-        let rows = self.semantic_rows(focus)?;
-        let previous = if focus.is_empty() { self.agent.snapshot.replace(rows.clone()) } else { None };
-        let mut text = match (delta, previous) {
-            (true, Some(previous)) => format_semantic_delta(&semantic_delta(&previous, &rows)),
-            _ => format_semantic_rows(&rows, full, focus),
-        };
-        let mut image = None;
-        if focus.is_empty() && rows.iter().filter(|row| row.kind != "heading").count() <= 1 {
-            if let Some((shot, note)) = self.capture_screen_for_model() {
-                text.push_str("\nMost of this screen is not available as text, so the screen image is attached. ");
-                text.push_str(&note);
-                image = Some(shot);
-            }
-        }
-        Ok(ModelResponse { text, image, ..Default::default() })
-    }
-
     /// Runs a parsed action command. Consecutive actions on the same surface
     /// run as one bounded plan; the command stops at the first plan that
     /// fails and reports exactly what did and did not run.
@@ -149,8 +150,15 @@ impl Engine {
         if let Some((_, earlier)) = self.agent.replies.iter().find(|(seen, _)| key.as_ref() == Some(seen)) {
             return copy(earlier);
         }
+        // Not cached: after the user fixes the phone, the same request must run again.
+        if !self.agent.verified {
+            self.preflight()?;
+        }
         let result = self.run_command(actions, request_identity);
-        if let Some(key) = key {
+        self.agent.verified = matches!(&result, Ok(response) if response.status == "done" && !response.failed);
+        // A refusal because the helper is stopped did not run; the resend after Resume must.
+        let refused = matches!(&result, Err(error) if error.code == Code::Stopped);
+        if let Some(key) = key.filter(|_| !refused) {
             self.agent.replies.truncate(15);
             self.agent.replies.insert(0, (key, copy(&result)));
         }
@@ -204,7 +212,12 @@ impl Engine {
                     start += consumed;
                 }
                 Err(error) if resolve::is_screen_miss(&error) => {
-                    let mut response = self.screen_miss(&error, &done);
+                    let missed = resolve::missed_label(&error).map(normalized);
+                    let failing = actions.iter().find_map(|action| match action {
+                        Action::Android(android) if Some(normalized(&display(&target_label(android)))) == missed => Some(android),
+                        _ => None,
+                    });
+                    let mut response = self.screen_miss(&error, &done, failing);
                     response.failed = !done.is_empty() && changed.is_some();
                     return Ok(response);
                 }
@@ -248,61 +261,6 @@ impl Engine {
         Ok(ModelResponse { text, image, status: "done", changed: changed.is_some(), failed: false })
     }
 
-    /// A label was not on screen: nothing from that step on ran. Show what
-    /// is there instead, plus the image for UIs that expose little text.
-    fn screen_miss(&mut self, error: &Error, done: &[String]) -> ModelResponse {
-        let mut text = if done.is_empty() { String::new() } else { format!("Partly done: {} ", completed(done)) };
-        text.push_str(&display(&error.message));
-        text.push_str(if done.is_empty() { ". Nothing was run." } else { ". The remaining steps were not run." });
-        // The image costs far more than the text: attach it only when the text says little.
-        let mut readable = 0;
-        if let Ok(rows) = self.semantic_rows("") {
-            readable = rows.iter().filter(|row| row.kind != "heading").count();
-            text.push_str("\nOn screen now:\n");
-            text.push_str(&format_semantic_rows(&rows, false, ""));
-            self.agent.snapshot = Some(rows);
-        }
-        let image = (readable <= 2).then(|| self.capture_screen_for_model()).flatten().map(|(shot, note)| {
-            text.push_str("\nThe screen image is attached; use tap point X Y on it only if no listed label works. ");
-            text.push_str(&note);
-            shot
-        });
-        ModelResponse { text, image, status: "not_found", ..Default::default() }
-    }
-
-    fn after_action(&mut self, surface: Surface) -> Option<String> {
-        match surface {
-            Surface::Android => {
-                let mut rows = self.semantic_rows("").ok()?;
-                // A tree that is still empty, or a short screen that says it is loading, is a
-                // window being drawn, not the screen the action led to.
-                for _ in 0..3 {
-                    let loading = rows.len() <= 6 && rows.iter().any(|row| row.kind.is_empty() && normalized(&row.label).starts_with("loading"));
-                    if !rows.is_empty() && !loading {
-                        break;
-                    }
-                    thread::sleep(Duration::from_millis(500));
-                    rows = self.semantic_rows("").ok()?;
-                }
-                // The agent has seen the last screen, so on the same screen only the changes are
-                // sent; a different screen is sent whole.
-                let changes = self.agent.snapshot.as_deref().and_then(|before| screen_changes(before, &rows));
-                let text = match changes {
-                    Some(changes) => format!("Changed:\n{changes}"),
-                    None => format!("Now on screen:\n{}", format_semantic_rows(&rows, false, "")),
-                };
-                self.agent.snapshot = Some(rows);
-                Some(text)
-            }
-            Surface::Browser => self.read_page().ok().map(|page| format!("Now: {}", format_browser_page(&page))),
-        }
-    }
-
-    fn semantic_rows(&mut self, focus: &str) -> Result<Vec<SemanticRow>> {
-        let value = self.bridge_read(|bridge| bridge.query("semantic", Value::String(focus.to_owned())))?;
-        parse_semantic_rows(&value)
-    }
-
     /// Compiles and runs consecutive Android actions as one plan, returning
     /// how many were consumed. A label that is missing now may only appear
     /// after earlier steps change the screen (`open app "X" then tap "Y"`):
@@ -324,6 +282,13 @@ impl Engine {
         let mut ops: Vec<Op> = Vec::with_capacity(actions.len());
         for (index, action) in actions.iter().enumerate() {
             let Action::Android(action) = action else { return Err(Error::new(Code::Protocol, "an action group mixed surfaces")) };
+            // A switch is read before and after its tap, so it runs as a plan of its own.
+            if matches!(action, AndroidAction::Set { .. } | AndroidAction::Toggle(_)) {
+                if index > 0 {
+                    return Ok((self.run_android(&actions[..index], ops, &scene, identity)?, index));
+                }
+                return Ok((self.switch_step(action, &scene, identity)?, 1));
+            }
             self.agent.loose = false;
             let noted = self.agent.mapping.len();
             let compiled = self.compile_android(action, &scene);
@@ -356,6 +321,68 @@ impl Engine {
         Ok((self.run_android(actions, ops, &scene, identity)?, actions.len()))
     }
 
+    /// `set` taps only a switch that is not yet in the asked state; `toggle` and `set` both read
+    /// the state again afterwards, so a tap that changed nothing is a failure, not a success.
+    fn switch_step(&mut self, action: &AndroidAction, scene: &Scene, identity: Option<&str>) -> Result<Step> {
+        let (target, want) = match action {
+            AndroidAction::Set { target, on } => (target, Some(*on)),
+            AndroidAction::Toggle(target) => (target, None),
+            _ => return Err(Error::new(Code::Protocol, "not a switch action")),
+        };
+        let (name, state) = (display_n(&target.label, 64), |on: bool| if on { "on" } else { "off" });
+        let op = Op::Tap(self.resolve_target(scene, target)?);
+        let before = self.switch_state(target)?;
+        let done = |text: String, changed| Step { echo: "Done.".len(), text, image: None, changed };
+        match (before, want) {
+            (Some(now), Some(on)) if now == on => return Ok(done(format!("Done. {name} was already {}.", state(on)), None)),
+            (None, Some(_)) => {
+                return Err(Error::plain(
+                    Code::Args,
+                    format!("\"{name}\" is not a uniquely named switch or checkbox on this screen; nothing was run. Read the screen, then use its label without number, or e12."),
+                ))
+            }
+            _ => {}
+        }
+        let mut step = self.run_android(&[Action::Android(action.clone())], vec![op], scene, identity)?;
+        let Some(before) = before else { return Ok(step) };
+        // Some switches commit a moment after the screen settles.
+        let mut after = self.switch_state(target)?;
+        for _ in 0..3 {
+            if after != Some(before) {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            after = self.switch_state(target)?;
+        }
+        if after == Some(before) {
+            let screen = self.model_read(CommandRead::Screen { full: false, matching: None, delta: false }).map(|read| read.text).unwrap_or_default();
+            return Err(Error::plain(Code::Partial, format!("Tapped {name}, but it is still {}. Screen now:\n{screen}", state(before))));
+        }
+        if let Some(now) = after {
+            step = done(format!("Done. {name} is now {}.", state(now)), step.changed);
+        }
+        Ok(step)
+    }
+
+    /// Whether the switch or checkbox the target names is on, or `None` when none is on screen.
+    fn switch_state(&mut self, target: &Target) -> Result<Option<bool>> {
+        // `number N` counts helper nodes, not these merged rows, so it could name another control.
+        if target.ordinal.is_some() {
+            return Ok(None);
+        }
+        let rows = self.semantic_rows("")?;
+        // A row copied from the screen (`sw Wi-Fi=on`) names the switch it shows.
+        let mut label = normalized(&target.label);
+        if !rows.iter().any(|row| normalized(&row.label) == label) {
+            if let Some((name, None)) = resolve::from_row(&target.label) {
+                label = normalized(&name);
+            }
+        }
+        let mut hits = rows.iter().filter(|row| if target.handle.is_some() { row.handle == target.handle } else { normalized(&row.label) == label });
+        let row = hits.next().filter(|_| target.handle.is_some() || hits.next().is_none());
+        Ok(row.filter(|row| matches!(row.kind.as_str(), "switch" | "checkbox")).map(|row| matches!(row.state.as_str(), "checked" | "on")))
+    }
+
     fn run_android(&mut self, actions: &[Action], ops: Vec<Op>, scene: &Scene, identity: Option<&str>) -> Result<Step> {
         if ops.len() > MAX_OPS || ops.iter().filter(|op| op.mutates()).count() > usize::from(MAX_MUTATIONS) {
             return Err(Error::new(Code::Bounds, "the action command exceeds its safety limit"));
@@ -363,9 +390,13 @@ impl Engine {
         let mut ops = ops;
         if ops.iter().any(Op::mutates) {
             let package = ops.iter().rev().find_map(|op| if let Op::Launch(package) = op { Some(package.clone()) } else { None });
+            self.agent.opened = package.is_some() || ops.iter().any(|op| matches!(op, Op::Setting(..)));
+            if self.agent.opened {
+                self.agent.seen.clear();
+            }
             let typed = ops.iter().any(|op| matches!(op, Op::Text(..)));
             ops.push(Op::Settle {
-                quiet_ms: if typed { TYPED_QUIET_MS } else { QUIET_MS },
+                quiet_ms: if typed { TYPED_QUIET_MS } else { quiet_window(std::env::var(QUIET_ENV).ok().as_deref()) },
                 cap_ms: if package.is_some() { LAUNCH_CAP_MS } else { SETTLE_CAP_MS },
                 package: package.unwrap_or_default(),
             });
@@ -377,6 +408,7 @@ impl Engine {
             max_mutations: MAX_MUTATIONS,
             ops: ops.into_boxed_slice(),
         };
+        self.agent.acted_from = scene.generation;
         let run = self.run_plan(&plan);
         self.end_image_unless_unchanged(&run, scene.generation);
         let receipt = run.map_err(crate::journal::explain_reuse)?;
@@ -428,7 +460,7 @@ impl Engine {
     fn compile_android(&mut self, action: &AndroidAction, scene: &Scene) -> Result<Op> {
         use AndroidAction as A;
         Ok(match action {
-            A::Tap(target) | A::Toggle(target) => Op::Tap(self.resolve_target(scene, target)?),
+            A::Tap(target) | A::Toggle(target) | A::Set { target, .. } => Op::Tap(self.resolve_target(scene, target)?),
             A::Hold(target) => Op::Long(self.resolve_target(scene, target)?),
             A::Type { text, target } => Op::Text(self.resolve_target_as(scene, target, "edit")?, text.clone()),
             A::Scroll { direction, target } => Op::Scroll(self.resolve_target_as(scene, target, "scroll")?, *direction),
@@ -444,8 +476,11 @@ impl Engine {
             A::WaitTarget { target, seconds } => Op::Wait(Predicate::Exists(Match::Label(target.label.clone())), seconds.saturating_mul(1000)),
             A::WaitText { text, seconds } => Op::Wait(Predicate::Text(text.clone()), seconds.saturating_mul(1000)),
             A::WaitScreenChange { seconds } => Op::Wait(Predicate::GenerationAfter(scene.generation), seconds.saturating_mul(1000)),
-            A::VerifyExists(target) if target.ordinal.is_some() => Op::Assert(Predicate::Exists(Match::Ref(self.resolve_target(scene, target)?))),
+            A::VerifyExists(target) if target.ordinal.is_some() || target.handle.is_some() => Op::Assert(Predicate::Exists(Match::Ref(self.resolve_target(scene, target)?))),
             A::VerifyExists(target) => Op::Assert(Predicate::Exists(Match::Label(target.label.clone()))),
+            A::VerifyGone(target) if target.ordinal.is_some() || target.handle.is_some() => {
+                return Err(Error::new(Code::Args, "verify gone takes a plain label; a number or eN handle cannot name an element that is no longer there"));
+            }
             // A gone target cannot be resolved to a ref; check the label instead.
             A::VerifyGone(target) => Op::Assert(Predicate::Missing(Match::Label(target.label.clone()))),
             A::VerifyText(text) => Op::Assert(Predicate::Text(text.clone())),
@@ -458,7 +493,10 @@ impl Engine {
             A::ScreenRecord(seconds) => Op::Capture(Capture::ScreenRecord(*seconds)),
             A::NotificationOpen(target) => Op::NotificationOpen(self.notification_key(target)?),
             A::NotificationDismiss(target) => Op::NotificationDismiss(self.notification_key(target)?),
-            A::NotificationAction(target) => Op::NotificationAction(self.notification_key(target)?),
+            A::NotificationAction(target, label) => {
+                let (key, label) = resolve::notification_action(&self.read(Read::Notifications)?, target, label.as_deref())?;
+                Op::NotificationAction(key, label)
+            }
             A::PointTap { x, y } => {
                 let (x, y) = self.map_point(*x, *y)?;
                 Op::PointTap { x, y }
@@ -479,6 +517,24 @@ impl Engine {
     /// `want` is `"edit"` when the step needs a text field and `"scroll"` when it needs a scrollable
     /// area, so a heading or a control with the same words is not a candidate.
     fn resolve_target_as(&mut self, scene: &Scene, target: &Target, want: &str) -> Result<u16> {
+        if let Some(handle) =
+            target.handle.filter(|_| self.agent.marked_in.as_ref().is_none_or(|(package, generation)| (&**package, *generation) != (&*scene.package, scene.generation)))
+        {
+            return Err(Error::plain(Code::Missing, format!("e{handle} is from an earlier screen or none was read; read the screen again for current handles")));
+        }
+        let first = self.resolve_exact_as(scene, target, want);
+        // A whole row copied from `screen` (`sw Wi-Fi=on`, `Save#2`) names its control when its
+        // text is not itself a label.
+        match (&first, resolve::from_row(&target.label)) {
+            (Err(error), Some((label, ordinal))) if target.handle.is_none() && resolve::is_screen_miss(error) => {
+                let row = Target { label: label.into(), ordinal: target.ordinal.or(ordinal), handle: None };
+                self.resolve_exact_as(scene, &row, want).or(first)
+            }
+            _ => first,
+        }
+    }
+
+    fn resolve_exact_as(&mut self, scene: &Scene, target: &Target, want: &str) -> Result<u16> {
         let args = json!({"label": target.label.as_ref(), "ordinal": target.ordinal.unwrap_or(0), "want": want, "handle": target.handle.map_or(-1, i32::from)});
         match self.bridge_read(|bridge| bridge.query("resolve", args.clone())) {
             Ok(value) => {
@@ -486,24 +542,44 @@ impl Engine {
                 if let (Some(handle), true) = (target.handle, refs.is_empty()) {
                     return Err(Error::plain(Code::Missing, format!("e{handle} is not on the current screen; read the screen again for current handles")));
                 }
+                if !self.unseen_label_runs(target, tier, refs.len(), &labels) {
+                    return Err(resolve::missing(&target.label, "screen"));
+                }
                 // A single control whose label only contains the request is acted on when it is
                 // plainly what was meant, and the result names it; otherwise it counts as missing.
-                if tier >= 2 && refs.len() == 1 && target.ordinal.is_none() {
-                    let actual = labels.first().map(String::as_str).unwrap_or_default();
+                // A number does not excuse the check: `Save number 2` may not reach "Save and delete all".
+                if tier >= 2 && (refs.len() == 1 || target.ordinal.is_some()) {
+                    let actual = labels.get(target.ordinal.map_or(0, |n| usize::from(n) - 1)).map(String::as_str).unwrap_or_default();
                     if !resolve::near_miss(&target.label, actual) {
                         return Err(Error::plain(
                             Code::Missing,
                             format!("{}; the closest label is \"{}\", which was not tapped", resolve::missing(&target.label, "screen").message, display(actual)),
                         ));
                     }
-                    self.agent.mapping.push(format!("\"{}\" is the closest label to \"{}\"", display(actual), display(&target.label)));
+                    if target.ordinal.is_none() {
+                        self.agent.mapping.push(format!("\"{}\" is the closest label to \"{}\"", display(actual), display(&target.label)));
+                    }
                 }
                 self.agent.loose = tier >= 2 && !refs.is_empty();
                 resolve::choose(target, refs, "screen")
+                    .map_err(|error| if error.code == Code::Ambiguous && target.ordinal.is_none() { self.say_which(error, &labels) } else { error })
             }
             Err(error) if error.code == Code::Unsupported => resolve::scene_target(scene, target),
             Err(error) => Err(error),
         }
+    }
+
+    /// In a served session, a label the agent was never shown runs only as an exact, unique, safe
+    /// match in the app it just opened; anything else is a miss that shows the screen.
+    fn unseen_label_runs(&self, target: &Target, tier: u64, count: usize, labels: &[String]) -> bool {
+        let needle = normalized(&target.label);
+        let state = &self.agent;
+        // Shown means the exact label, or the one control a near match resolves to.
+        let shown = state.seen.contains(&needle) || (count == 1 && labels.first().is_some_and(|label| state.seen.contains(&normalized(label))));
+        if !state.strict || target.handle.is_some() || shown {
+            return true;
+        }
+        state.opened && tier < 2 && count == 1 && target.ordinal.is_none() && !resolve::risky(&needle) && !labels.iter().any(|label| resolve::risky(label))
     }
 
     /// The scrollable area a bare `scroll DIRECTION` should move: the helper
@@ -625,120 +701,6 @@ impl Engine {
             changed: None,
         })
     }
-
-    fn capture_screen_for_model(&mut self) -> Option<(ModelImage, String)> {
-        let scene = self.ensure_scene().ok()?;
-        let plan = Plan {
-            id: self.operation_id(None, "read-screen").into_boxed_str(),
-            generation: scene.generation,
-            deadline_ms: 8000,
-            max_mutations: 0,
-            ops: vec![Op::Capture(Capture::Screen)].into_boxed_slice(),
-        };
-        let receipt = self.bridge_read(|bridge| bridge.act(&plan)).ok()?;
-        let bytes = self.download(receipt.artifact.as_deref()?).ok()?;
-        Some(self.present_screen(bytes))
-    }
-
-    /// The capture with a numbered box over each control (set-of-marks), or `None` when the helper
-    /// reports none. Best effort: the plain image is always a fine fallback.
-    fn marked(&mut self, bytes: &[u8]) -> Option<Vec<u8>> {
-        let rows = self.bridge_read(|bridge| bridge.query("marks", Value::Null)).ok()?;
-        let marks: Vec<Mark> = rows
-            .as_array()?
-            .iter()
-            .filter_map(|row| {
-                let n: Vec<u64> = row.as_array()?.iter().filter_map(Value::as_u64).collect();
-                let at = |i: usize| u32::try_from(*n.get(i)?).ok();
-                Some(Mark { handle: u16::try_from(*n.first()?).ok()?, rect: (at(1)?, at(2)?, at(3)?, at(4)?) })
-            })
-            .collect();
-        if marks.is_empty() {
-            return None;
-        }
-        let mut image = visual::decode(bytes).ok()?;
-        marks::draw(&mut image, &marks);
-        visual::encode(image.w, image.h, &image.pixels, usize::MAX).ok()
-    }
-
-    /// Compresses a screen capture for the model and remembers how its
-    /// coordinates map back to the device. The returned note tells the model
-    /// the image's size and scale, and calls out a changed screen shape.
-    fn present_screen(&mut self, bytes: Vec<u8>) -> (ModelImage, String) {
-        let marked = self.marked(&bytes);
-        let Ok(compressed) = compress::for_model(marked.as_deref().unwrap_or(&bytes), &Policy::from_env()) else {
-            // Sent unchanged, so the image is full resolution and its pixels are device pixels.
-            self.agent.space = visual::decode(&bytes).ok().map(|image| ImageSpace { device: (image.w, image.h), image: (image.w, image.h) });
-            self.agent.originals.insert("screen".into(), bytes.clone().into());
-            let mime_type = mime_type(&bytes);
-            return (ModelImage { bytes: self.remember("screen", bytes), mime_type }, String::new());
-        };
-        let mut note = compressed.note();
-        if marked.is_some() {
-            note.push_str(" Boxes carry numbers: tap eN taps the control with that number.");
-        }
-        if let Some(change) = compressed.space.change_note(self.agent.shape) {
-            note = format!("{change} {note}");
-        }
-        (self.agent.space, self.agent.shape) = (Some(compressed.space), Some(compressed.space));
-        self.agent.originals.insert("screen".into(), bytes.into());
-        (ModelImage { bytes: self.remember("screen", compressed.png), mime_type: "image/png" }, note)
-    }
-
-    /// Ends the last screen image unless the run provably left the screen as
-    /// it was (nothing changed, the outcome is known, the generation held).
-    fn end_image_unless_unchanged(&mut self, run: &Result<Receipt>, generation: u64) {
-        if !run.as_ref().is_ok_and(|receipt| receipt.m == 0 && receipt.g == generation && receipt.e.as_deref() != Some("unknown")) {
-            self.agent.space = None;
-        }
-    }
-
-    /// One-shot CLI processes keep the last screen image's coordinate space
-    /// on disk, so `au act 'tap point X Y'` matches the image saved by the
-    /// previous `au act 'capture screen'`. An ended image keeps only its shape.
-    pub fn load_image_space(&mut self) {
-        let value = std::fs::read(self.root().join(SPACE_FILE)).ok().and_then(|bytes| serde_json::from_slice::<Value>(&bytes).ok());
-        self.agent.shape = value.as_ref().and_then(ImageSpace::from_json);
-        self.agent.space = self.agent.shape.filter(|_| value.as_ref().and_then(|value| value["ended"].as_bool()) != Some(true));
-    }
-
-    pub fn save_image_space(&self) {
-        let path = self.root().join(SPACE_FILE);
-        match self.agent.space.or(self.agent.shape) {
-            Some(shape) => {
-                let mut value = shape.to_json();
-                value["ended"] = json!(self.agent.space.is_none());
-                let _ = crate::device::atomic(&path, value.to_string().as_bytes());
-            }
-            None => {
-                let _ = std::fs::remove_file(&path);
-            }
-        }
-    }
-
-    /// An image for `image hash` / `image difference`: the full-resolution
-    /// capture when there is one, else what the model was shown.
-    fn comparable(&self, alias: &str) -> Result<&[u8]> {
-        match self.agent.originals.get(alias) {
-            Some(original) => Ok(original),
-            None => self.image(alias),
-        }
-    }
-
-    fn image(&self, alias: &str) -> Result<&[u8]> {
-        self.agent.images.get(alias).map(AsRef::as_ref).ok_or_else(|| {
-            Error::plain(
-                Code::Artifact,
-                format!("No image named \"{}\" exists yet. Capture one first; images are named screen, photo, page screenshot, or crop.", display_n(alias, 64)),
-            )
-        })
-    }
-
-    fn remember(&mut self, alias: &str, bytes: Vec<u8>) -> Arc<[u8]> {
-        let bytes: Arc<[u8]> = bytes.into();
-        self.agent.images.insert(alias.into(), Arc::clone(&bytes));
-        bytes
-    }
 }
 
 fn compile_browser(action: &BrowserAction, observed: &Value, browser: &Browser) -> Result<BrowserOp> {
@@ -785,7 +747,7 @@ fn group_end(actions: &[Action], start: usize) -> usize {
 }
 
 /// Joins step results into one sentence list: `Opened Settings. Tapped Wi-Fi.`
-fn completed(done: &[String]) -> String {
+pub(crate) fn completed(done: &[String]) -> String {
     done.iter().map(|text| text.strip_prefix("Done. ").unwrap_or(text)).filter(|text| !text.is_empty() && *text != "Done.").collect::<Vec<_>>().join(" ")
 }
 
@@ -813,7 +775,9 @@ fn deadline(actions: &[Action]) -> u32 {
 fn target_label(action: &AndroidAction) -> String {
     use AndroidAction as A;
     match action {
-        A::Tap(t) | A::Toggle(t) | A::Hold(t) | A::Type { target: t, .. } | A::Scroll { target: t, .. } | A::ScrollUntil { target: Some(t), .. } => t.label.to_string(),
+        A::Tap(t) | A::Toggle(t) | A::Set { target: t, .. } | A::Hold(t) | A::Type { target: t, .. } | A::Scroll { target: t, .. } | A::ScrollUntil { target: Some(t), .. } => {
+            t.label.to_string()
+        }
         _ => String::new(),
     }
 }
@@ -821,7 +785,7 @@ fn target_label(action: &AndroidAction) -> String {
 /// Whether an action can bring up a different screen than the one it was compiled against.
 fn navigates(action: &AndroidAction) -> bool {
     use AndroidAction as A;
-    matches!(action, A::OpenApp(_) | A::OpenSetting(_) | A::OpenLink(_) | A::Key(_) | A::NotificationOpen(_) | A::NotificationAction(_))
+    matches!(action, A::OpenApp(_) | A::OpenSetting(_) | A::OpenLink(_) | A::Key(_) | A::NotificationOpen(_) | A::NotificationAction(..))
 }
 
 fn is_media(action: &Action) -> bool {
